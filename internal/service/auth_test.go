@@ -3,7 +3,6 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,9 +31,50 @@ func defaultTestConfig() *domain.Config {
 	return &domain.Config{
 		GoogleClientID:     "test-client-id",
 		GoogleClientSecret: "test-client-secret",
-		CallbackPort:       "0", // port 0 lets OS pick a free port
+		CallbackPort:       "0",
 		SpreadsheetID:      "test-sheet",
 	}
+}
+
+// fakeTokenServer creates an httptest server that returns a valid OAuth token response.
+func fakeTokenServer(t *testing.T, accessToken string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := map[string]interface{}{
+			"access_token":  accessToken,
+			"token_type":    "Bearer",
+			"expires_in":    3600,
+			"refresh_token": "refresh-" + accessToken,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		err := json.NewEncoder(w).Encode(resp)
+		require.NoError(t, err)
+	}))
+}
+
+// fakeErrorTokenServer creates an httptest server that returns an OAuth error.
+func fakeErrorTokenServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		err := json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
+		require.NoError(t, err)
+	}))
+}
+
+// simulateCallback sends an HTTP GET to the local callback server and asserts success.
+func simulateCallback(t *testing.T, port, query string, expectedStatus int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		resp, err := http.Get("http://localhost:" + port + "/callback?" + query)
+		if err != nil {
+			return false
+		}
+		closeErr := resp.Body.Close()
+		require.NoError(t, closeErr)
+		return resp.StatusCode == expectedStatus
+	}, 3*time.Second, 50*time.Millisecond)
 }
 
 // --- NewAuthService ---
@@ -154,17 +194,7 @@ func TestAuthService_GetValidToken_WhenTokenExpiredAndConfigError_ShouldReturnEr
 func TestAuthService_GetValidToken_WhenTokenExpiredAndRefreshSucceeds_ShouldReturnNewToken(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	// Fake token server that returns a refreshed token
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]interface{}{
-			"access_token":  "refreshed-access",
-			"token_type":    "Bearer",
-			"expires_in":    3600,
-			"refresh_token": "new-refresh",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
+	tokenServer := fakeTokenServer(t, "refreshed-access")
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -195,11 +225,7 @@ func TestAuthService_GetValidToken_WhenTokenExpiredAndRefreshSucceeds_ShouldRetu
 func TestAuthService_GetValidToken_WhenTokenExpiredAndRefreshFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	// Token server that returns an error
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"error":"invalid_grant"}`)
-	}))
+	tokenServer := fakeErrorTokenServer(t)
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -228,15 +254,7 @@ func TestAuthService_GetValidToken_WhenTokenExpiredAndRefreshFails_ShouldReturnE
 func TestAuthService_GetValidToken_WhenSaveRefreshedTokenFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]interface{}{
-			"access_token": "refreshed",
-			"token_type":   "Bearer",
-			"expires_in":   3600,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
+	tokenServer := fakeTokenServer(t, "refreshed")
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -318,15 +336,7 @@ func TestAuthService_Login_WhenCallbackHasNoCode_ShouldReturnError(t *testing.T)
 		errCh <- err
 	}()
 
-	// Wait for the callback server to start
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://localhost:18882/callback?error=access_denied")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusBadRequest
-	}, 3*time.Second, 50*time.Millisecond)
+	simulateCallback(t, "18882", "error=access_denied", http.StatusBadRequest)
 
 	err := <-errCh
 	assert.ErrorContains(t, err, "authorization denied")
@@ -335,17 +345,7 @@ func TestAuthService_Login_WhenCallbackHasNoCode_ShouldReturnError(t *testing.T)
 func TestAuthService_Login_WhenFullFlowSucceeds_ShouldReturnUser(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	// Fake token endpoint
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]interface{}{
-			"access_token":  "login-access-token",
-			"token_type":    "Bearer",
-			"expires_in":    3600,
-			"refresh_token": "login-refresh-token",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
+	tokenServer := fakeTokenServer(t, "login-access-token")
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -375,15 +375,7 @@ func TestAuthService_Login_WhenFullFlowSucceeds_ShouldReturnUser(t *testing.T) {
 		errCh <- err
 	}()
 
-	// Simulate Google redirecting back with the auth code
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://localhost:18883/callback?code=test-auth-code")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 3*time.Second, 50*time.Millisecond)
+	simulateCallback(t, "18883", "code=test-auth-code", http.StatusOK)
 
 	user := <-resultCh
 	err := <-errCh
@@ -399,11 +391,7 @@ func TestAuthService_Login_WhenFullFlowSucceeds_ShouldReturnUser(t *testing.T) {
 func TestAuthService_Login_WhenExchangeFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	// Token server that rejects the exchange
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, `{"error":"invalid_grant"}`)
-	}))
+	tokenServer := fakeErrorTokenServer(t)
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -427,14 +415,7 @@ func TestAuthService_Login_WhenExchangeFails_ShouldReturnError(t *testing.T) {
 		errCh <- err
 	}()
 
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://localhost:18884/callback?code=bad-code")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 3*time.Second, 50*time.Millisecond)
+	simulateCallback(t, "18884", "code=bad-code", http.StatusOK)
 
 	err := <-errCh
 	assert.ErrorContains(t, err, "exchanging code for token")
@@ -443,15 +424,7 @@ func TestAuthService_Login_WhenExchangeFails_ShouldReturnError(t *testing.T) {
 func TestAuthService_Login_WhenSaveTokenFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]interface{}{
-			"access_token": "token",
-			"token_type":   "Bearer",
-			"expires_in":   3600,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
+	tokenServer := fakeTokenServer(t, "token")
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -476,14 +449,7 @@ func TestAuthService_Login_WhenSaveTokenFails_ShouldReturnError(t *testing.T) {
 		errCh <- err
 	}()
 
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://localhost:18885/callback?code=test-code")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 3*time.Second, 50*time.Millisecond)
+	simulateCallback(t, "18885", "code=test-code", http.StatusOK)
 
 	err := <-errCh
 	assert.ErrorContains(t, err, "saving token")
@@ -492,15 +458,7 @@ func TestAuthService_Login_WhenSaveTokenFails_ShouldReturnError(t *testing.T) {
 func TestAuthService_Login_WhenFetchUserInfoFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
-	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		resp := map[string]interface{}{
-			"access_token": "token-for-userinfo",
-			"token_type":   "Bearer",
-			"expires_in":   3600,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
-	}))
+	tokenServer := fakeTokenServer(t, "token-for-userinfo")
 	defer tokenServer.Close()
 
 	googleEndpoint = oauth2.Endpoint{
@@ -526,14 +484,7 @@ func TestAuthService_Login_WhenFetchUserInfoFails_ShouldReturnError(t *testing.T
 		errCh <- err
 	}()
 
-	require.Eventually(t, func() bool {
-		resp, err := http.Get("http://localhost:18886/callback?code=test-code")
-		if err != nil {
-			return false
-		}
-		resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}, 3*time.Second, 50*time.Millisecond)
+	simulateCallback(t, "18886", "code=test-code", http.StatusOK)
 
 	err := <-errCh
 	assert.ErrorContains(t, err, "fetching user info")
@@ -550,8 +501,7 @@ func TestAuthService_Login_WhenEmptyPort_ShouldDefaultTo8881(t *testing.T) {
 	cfg.CallbackPort = ""
 	configRepo.On("GetConfig").Return(cfg, nil)
 
-	browserOpenFunc = func(url string) error {
-		// Just verify the URL was built, then fail to stop the flow
+	browserOpenFunc = func(_ string) error {
 		return errors.New("stop")
 	}
 
