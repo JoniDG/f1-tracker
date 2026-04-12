@@ -14,10 +14,16 @@ type UserRepository interface {
 	GetUserInfo(accessToken string) (*domain.User, error)
 }
 
-type userRepository struct{}
+type userRepository struct {
+	baseURL string
+}
 
 func NewUserRepository() UserRepository {
-	return &userRepository{}
+	return newUserRepository("https://www.googleapis.com")
+}
+
+func newUserRepository(baseURL string) UserRepository {
+	return &userRepository{baseURL: baseURL}
 }
 
 func (r *userRepository) GetUserInfo(accessToken string) (*domain.User, error) {
@@ -25,7 +31,7 @@ func (r *userRepository) GetUserInfo(accessToken string) (*domain.User, error) {
 	// SetAuthToken agrega el header "Authorization: Bearer {token}" automaticamente.
 	resp, err := resty.New().R().
 		SetAuthToken(accessToken).
-		Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		Get(r.baseURL + "/oauth2/v2/userinfo")
 	if err != nil {
 		return nil, fmt.Errorf("calling userinfo API: %w", err)
 	}

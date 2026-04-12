@@ -13,6 +13,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
+var (
+	browserOpenFunc = browser.OpenURL
+	googleEndpoint  = oauth2.Endpoint{ // #nosec G101 -- public Google OAuth URLs, not credentials
+		AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
+		TokenURL: "https://oauth2.googleapis.com/token",
+	}
+)
+
 type AuthService interface {
 	// Login ejecuta el flujo completo de OAuth2+PKCE con Google.
 	// Es bloqueante: espera hasta que el usuario autorice en el browser.
@@ -53,10 +61,7 @@ func (s *authService) buildOAuthConfig() (*oauth2.Config, error) {
 	return &oauth2.Config{
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
-		Endpoint: oauth2.Endpoint{ // #nosec G101 -- public Google OAuth URLs, not credentials
-			AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
-			TokenURL: "https://oauth2.googleapis.com/token",
-		},
+		Endpoint: googleEndpoint,
 		RedirectURL: fmt.Sprintf("http://localhost:%s/callback", port),
 		Scopes: []string{
 			"https://www.googleapis.com/auth/spreadsheets",
@@ -181,7 +186,7 @@ func (s *authService) Login() (*domain.User, error) {
 	}()
 
 	// Abre el browser del usuario con la URL de autorizacion de Google
-	if err := browser.OpenURL(authURL); err != nil {
+	if err := browserOpenFunc(authURL); err != nil {
 		_ = server.Shutdown(context.Background())
 		return nil, fmt.Errorf("opening browser: %w", err)
 	}

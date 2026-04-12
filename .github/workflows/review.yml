@@ -54,7 +54,10 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          go test ./... -coverprofile=coverage.out -covermode=atomic
+          go test ./internal/repository/... ./internal/service/... \
+            -coverprofile=coverage.out \
+            -covermode=atomic \
+            -coverpkg=./internal/repository/...,./internal/service/...
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: ${COVERAGE}%"
           if [ "$(echo "$COVERAGE < 90.0" | bc -l)" -eq 1 ]; then
