@@ -36,7 +36,7 @@ func NewConfigRepository() (ConfigRepository, error) {
 	// Arma el path completo: ~/.config/f1-tracker/
 	configPath := filepath.Join(userConfigDir, defines.ConfigPath)
 	// Crea el directorio (y cualquier padre faltante) con permisos rwxr-xr-x
-	if err = os.MkdirAll(configPath, 0o755); err != nil {
+	if err = os.MkdirAll(configPath, 0o750); err != nil {
 		return nil, fmt.Errorf("creating config dir: %w", err)
 	}
 

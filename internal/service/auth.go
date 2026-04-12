@@ -53,7 +53,7 @@ func (s *authService) buildOAuthConfig() (*oauth2.Config, error) {
 	return &oauth2.Config{
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
-		Endpoint: oauth2.Endpoint{
+		Endpoint: oauth2.Endpoint{ // #nosec G101 -- public Google OAuth URLs, not credentials
 			AuthURL:  "https://accounts.google.com/o/oauth2/v2/auth",
 			TokenURL: "https://oauth2.googleapis.com/token",
 		},
@@ -166,8 +166,9 @@ func (s *authService) Login() (*domain.User, error) {
 	// Wrapeamos el router de Gin en un http.Server para poder llamar Shutdown() despues.
 	// Si usaramos router.Run() directamente, no podriamos detener el servidor limpiamente.
 	server := &http.Server{
-		Addr:    ":" + port,
-		Handler: router,
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	// Lanza el servidor HTTP en una goroutine para que no bloquee el flujo principal.
