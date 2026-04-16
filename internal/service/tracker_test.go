@@ -15,8 +15,9 @@ func TestNewTrackerService_ShouldReturnInstance(t *testing.T) {
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
 
-	svc := NewTrackerService(authSvc, configRepo, userRepo)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	assert.NotNil(t, svc)
 }
@@ -25,7 +26,8 @@ func TestTrackerService_GetCurrentUser_WhenValidToken_ShouldReturnUser(t *testin
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
-	svc := NewTrackerService(authSvc, configRepo, userRepo)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
 	expectedUser := &domain.User{DisplayName: "Juan", Email: "juan@test.com"}
@@ -46,7 +48,8 @@ func TestTrackerService_GetCurrentUser_WhenTokenError_ShouldReturnError(t *testi
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
-	svc := NewTrackerService(authSvc, configRepo, userRepo)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
 
@@ -61,7 +64,8 @@ func TestTrackerService_GetCurrentUser_WhenUserInfoError_ShouldReturnError(t *te
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
-	svc := NewTrackerService(authSvc, configRepo, userRepo)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
 	authSvc.On("GetValidToken").Return(token, nil)
