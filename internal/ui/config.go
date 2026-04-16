@@ -7,10 +7,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/JoniDG/f1-tracker/internal/domain"
-	"github.com/JoniDG/f1-tracker/internal/repository"
+	"github.com/JoniDG/f1-tracker/internal/service"
 )
 
-func NewConfigScreen(window fyne.Window, configRepo repository.ConfigRepository, onSave func()) fyne.CanvasObject {
+func NewConfigScreen(window fyne.Window, authSvc service.AuthService, onSave func()) fyne.CanvasObject {
 	clientIDEntry := widget.NewEntry()
 	clientIDEntry.SetPlaceHolder("Google Client ID")
 
@@ -24,7 +24,7 @@ func NewConfigScreen(window fyne.Window, configRepo repository.ConfigRepository,
 	spreadsheetEntry.SetPlaceHolder("Spreadsheet ID")
 
 	// Pre-llenar si ya existe config
-	if cfg, err := configRepo.GetConfig(); err == nil {
+	if cfg, err := authSvc.GetConfig(); err == nil {
 		clientIDEntry.SetText(cfg.GoogleClientID)
 		clientSecretEntry.SetText(cfg.GoogleClientSecret)
 		portEntry.SetText(cfg.CallbackPort)
@@ -34,10 +34,10 @@ func NewConfigScreen(window fyne.Window, configRepo repository.ConfigRepository,
 	saveBtn := widget.NewButton("Guardar", func() {
 		port := portEntry.Text
 		if port == "" {
-			port = "8881"
+			port = "8081"
 		}
 
-		err := configRepo.SetConfig(domain.Config{
+		err := authSvc.SetConfig(domain.Config{
 			GoogleClientID:     clientIDEntry.Text,
 			GoogleClientSecret: clientSecretEntry.Text,
 			CallbackPort:       port,

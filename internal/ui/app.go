@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/JoniDG/f1-tracker/internal/domain"
-	"github.com/JoniDG/f1-tracker/internal/repository"
 	"github.com/JoniDG/f1-tracker/internal/service"
 )
 
@@ -18,13 +17,12 @@ import (
 type FyneApp struct {
 	app        fyne.App
 	window     fyne.Window
-	configRepo repository.ConfigRepository
 	authSvc    service.AuthService
 	trackerSvc service.TrackerService
 }
 
 // NewFyneApp crea la aplicacion Fyne con una ventana de 500x400.
-func NewFyneApp(configRepo repository.ConfigRepository, authSvc service.AuthService, trackerSvc service.TrackerService) *FyneApp {
+func NewFyneApp(authSvc service.AuthService, trackerSvc service.TrackerService) *FyneApp {
 	// app.New() inicializa el framework Fyne (solo se llama una vez en toda la app)
 	a := fyneApp.New()
 	// NewWindow crea la ventana principal con el titulo dado
@@ -34,7 +32,6 @@ func NewFyneApp(configRepo repository.ConfigRepository, authSvc service.AuthServ
 	return &FyneApp{
 		app:        a,
 		window:     w,
-		configRepo: configRepo,
 		authSvc:    authSvc,
 		trackerSvc: trackerSvc,
 	}
@@ -43,12 +40,10 @@ func NewFyneApp(configRepo repository.ConfigRepository, authSvc service.AuthServ
 // Run decide que pantalla mostrar al inicio segun el estado de la config y el token,
 // y arranca el loop principal de Fyne (ShowAndRun es bloqueante, no retorna hasta cerrar la ventana).
 func (fa *FyneApp) Run() {
-	// Si no hay config o falta el ClientID -> pantalla de configuracion
-	cfg, err := fa.configRepo.GetConfig()
-	if err != nil || cfg.GoogleClientID == "" {
+	// Si no hay config o las credenciales son invalidas -> pantalla de configuracion
+	if !fa.authSvc.HasValidConfig() {
 		fa.showConfigScreen()
-	} else if _, err := fa.configRepo.GetGoogleToken(); err != nil {
-		log.Printf("Error reading Google token: %v", err)
+	} else if !fa.authSvc.HasStoredToken() {
 		// Si hay config pero no hay token guardado -> pantalla de login
 		fa.showLoginScreen()
 	} else {
@@ -74,7 +69,7 @@ func (fa *FyneApp) Run() {
 func (fa *FyneApp) showConfigScreen() {
 	// window.SetContent reemplaza todo el contenido de la ventana con el nuevo widget.
 	// Asi se implementa la "navegacion" entre pantallas en Fyne.
-	fa.window.SetContent(NewConfigScreen(fa.window, fa.configRepo, fa.showLoginScreen))
+	fa.window.SetContent(NewConfigScreen(fa.window, fa.authSvc, fa.showLoginScreen))
 }
 
 // showLoginScreen muestra la pantalla de login con el boton "Login con Google".
@@ -98,4 +93,12 @@ func (fa *FyneApp) showSuccessScreen(user *domain.User) {
 			),
 		),
 	)
+
+	err := fa.trackerSvc.EnsureSheetExists("JoniDG")
+	if err != nil {
+		log.Printf("Error: %v", err)
+	}
+
+	/*err := fa.trackerSvc.GetSheet()
+	 */
 }
