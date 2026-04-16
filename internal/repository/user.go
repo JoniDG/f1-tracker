@@ -19,11 +19,9 @@ type userRepository struct {
 }
 
 func NewUserRepository() UserRepository {
-	return newUserRepository("https://www.googleapis.com")
-}
-
-func newUserRepository(baseURL string) UserRepository {
-	return &userRepository{baseURL: baseURL}
+	return &userRepository{
+		baseURL: "https://www.googleapis.com",
+	}
 }
 
 func (r *userRepository) GetUserInfo(accessToken string) (*domain.User, error) {

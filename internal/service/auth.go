@@ -29,6 +29,14 @@ type AuthService interface {
 	// GetValidToken devuelve un token valido. Si el access token expiro,
 	// usa el refresh token para obtener uno nuevo y lo persiste en config.
 	GetValidToken() (*oauth2.Token, error)
+	// HasValidConfig verifica que las credenciales de Google sean validas.
+	HasValidConfig() bool
+	// HasStoredToken verifica si hay un token de Google guardado.
+	HasStoredToken() bool
+	// GetConfig devuelve la configuracion guardada.
+	GetConfig() (*domain.Config, error)
+	// SetConfig guarda la configuracion.
+	SetConfig(c domain.Config) error
 }
 
 type authService struct {
@@ -38,6 +46,23 @@ type authService struct {
 
 func NewAuthService(configRepo repository.ConfigRepository, userRepo repository.UserRepository) AuthService {
 	return &authService{configRepo: configRepo, userRepo: userRepo}
+}
+
+func (s *authService) HasValidConfig() bool {
+	return s.configRepo.HasValidConfig()
+}
+
+func (s *authService) HasStoredToken() bool {
+	_, err := s.configRepo.GetGoogleToken()
+	return err == nil
+}
+
+func (s *authService) GetConfig() (*domain.Config, error) {
+	return s.configRepo.GetConfig()
+}
+
+func (s *authService) SetConfig(c domain.Config) error {
+	return s.configRepo.SetConfig(c)
 }
 
 // buildOAuthConfig construye el oauth2.Config a partir de la config guardada.
@@ -50,7 +75,7 @@ func (s *authService) buildOAuthConfig() (*oauth2.Config, error) {
 
 	port := cfg.CallbackPort
 	if port == "" {
-		port = "8881"
+		port = "8081"
 	}
 
 	// oauth2.Config define los parametros de la autenticacion OAuth2:
@@ -61,8 +86,8 @@ func (s *authService) buildOAuthConfig() (*oauth2.Config, error) {
 	return &oauth2.Config{
 		ClientID:     cfg.GoogleClientID,
 		ClientSecret: cfg.GoogleClientSecret,
-		Endpoint: googleEndpoint,
-		RedirectURL: fmt.Sprintf("http://localhost:%s/callback", port),
+		Endpoint:     googleEndpoint,
+		RedirectURL:  fmt.Sprintf("http://localhost:%s/callback", port),
 		Scopes: []string{
 			"https://www.googleapis.com/auth/spreadsheets",
 			"https://www.googleapis.com/auth/userinfo.profile",
@@ -116,7 +141,7 @@ func (s *authService) Login() (*domain.User, error) {
 	cfg, _ := s.configRepo.GetConfig()
 	port := cfg.CallbackPort
 	if port == "" {
-		port = "8881"
+		port = "8081"
 	}
 
 	// PKCE (Proof Key for Code Exchange) agrega seguridad al flujo OAuth2:

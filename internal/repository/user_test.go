@@ -25,7 +25,7 @@ func TestUserRepository_GetUserInfo_WhenSuccess_ShouldReturnUser(t *testing.T) {
 	}))
 	defer server.Close()
 
-	repo := newUserRepository(server.URL)
+	repo := &userRepository{baseURL: server.URL}
 
 	user, err := repo.GetUserInfo("test-token")
 
@@ -41,7 +41,7 @@ func TestUserRepository_GetUserInfo_WhenNon200Status_ShouldReturnError(t *testin
 	}))
 	defer server.Close()
 
-	repo := newUserRepository(server.URL)
+	repo := &userRepository{baseURL: server.URL}
 
 	user, err := repo.GetUserInfo("bad-token")
 
@@ -57,7 +57,7 @@ func TestUserRepository_GetUserInfo_WhenInvalidJSON_ShouldReturnError(t *testing
 	}))
 	defer server.Close()
 
-	repo := newUserRepository(server.URL)
+	repo := &userRepository{baseURL: server.URL}
 
 	user, err := repo.GetUserInfo("test-token")
 
@@ -66,7 +66,7 @@ func TestUserRepository_GetUserInfo_WhenInvalidJSON_ShouldReturnError(t *testing
 }
 
 func TestUserRepository_GetUserInfo_WhenServerDown_ShouldReturnError(t *testing.T) {
-	repo := newUserRepository("http://localhost:1")
+	repo := &userRepository{baseURL: "http://localhost:1"}
 
 	user, err := repo.GetUserInfo("test-token")
 

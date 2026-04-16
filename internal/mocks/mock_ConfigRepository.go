@@ -36,7 +36,7 @@ func (m *MockConfigRepository) GetConfig() (*domain.Config, error) {
 	return args.Get(0).(*domain.Config), args.Error(1)
 }
 
-func (m *MockConfigRepository) IsLoaded() bool {
+func (m *MockConfigRepository) HasValidConfig() bool {
 	args := m.Called()
 	return args.Bool(0)
 }

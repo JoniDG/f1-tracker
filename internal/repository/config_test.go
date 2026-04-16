@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/JoniDG/f1-tracker/internal/defines"
 	"github.com/JoniDG/f1-tracker/internal/domain"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -15,39 +17,54 @@ import (
 
 func newTestConfigRepo(t *testing.T) ConfigRepository {
 	t.Helper()
-	configPath := filepath.Join(t.TempDir(), defines.ConfigPath)
-	repo, err := newConfigRepository(configPath)
-	require.NoError(t, err)
-	return repo
+	return newTestConfigRepoAt(t, filepath.Join(t.TempDir(), defines.ConfigPath))
+}
+
+func newTestConfigRepoAt(t *testing.T, configPath string) ConfigRepository {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(configPath, 0o750))
+
+	v := viper.New()
+	v.SetConfigType("json")
+	v.AddConfigPath(configPath)
+	v.SetConfigName(defines.ConfigFilename)
+
+	cr := &configRepository{
+		viper:        v,
+		configLoaded: true,
+	}
+
+	if err := v.ReadInConfig(); err != nil {
+		var notFoundErr viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFoundErr) {
+			require.NoError(t, err)
+		}
+		require.NoError(t, v.SafeWriteConfig())
+		cr.configLoaded = false
+	}
+
+	return cr
 }
 
 func TestNewConfigRepository_WhenNewDir_ShouldCreateConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, defines.ConfigPath)
 
-	_, err := newConfigRepository(configPath)
+	_ = newTestConfigRepoAt(t, configPath)
 
-	require.NoError(t, err)
 	assert.FileExists(t, filepath.Join(configPath, defines.ConfigFilename+".json"))
 }
 
-func TestNewConfigRepository_WhenNewDir_ShouldSetConfigLoadedFalse(t *testing.T) {
-	repo := newTestConfigRepo(t)
-
-	assert.False(t, repo.IsLoaded())
-}
-
-func TestNewConfigRepository_WhenExistingConfig_ShouldSetConfigLoadedTrue(t *testing.T) {
+func TestNewConfigRepository_WhenExistingConfig_ShouldLoadSuccessfully(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, defines.ConfigPath)
 	require.NoError(t, os.MkdirAll(configPath, 0o750))
 	configFile := filepath.Join(configPath, defines.ConfigFilename+".json")
 	require.NoError(t, os.WriteFile(configFile, []byte(`{"config":{"googleclientid":"test-id"}}`), 0o600))
 
-	repo, err := newConfigRepository(configPath)
+	repo := newTestConfigRepoAt(t, configPath)
 
-	require.NoError(t, err)
-	assert.True(t, repo.IsLoaded())
+	assert.NotNil(t, repo)
 }
 
 func TestNewConfigRepository_WhenInvalidPath_ShouldReturnError(t *testing.T) {
@@ -72,7 +89,6 @@ func TestConfigRepository_SetConfig_WhenValid_ShouldPersistAndSetLoaded(t *testi
 	err := repo.SetConfig(cfg)
 
 	require.NoError(t, err)
-	assert.True(t, repo.IsLoaded())
 }
 
 func TestConfigRepository_GetConfig_WhenLoaded_ShouldReturnSavedConfig(t *testing.T) {
@@ -168,25 +184,57 @@ func TestConfigRepository_GetGoogleToken_WhenNoTokenSet_ShouldReturnEmptyToken(t
 	assert.Empty(t, got.AccessToken)
 }
 
-func TestConfigRepository_IsLoaded_WhenNewRepo_ShouldReturnFalse(t *testing.T) {
+func TestConfigRepository_HasValidConfig_WhenValidOAuthCredentials_ShouldReturnTrue(t *testing.T) {
 	repo := newTestConfigRepo(t)
+	require.NoError(t, repo.SetConfig(domain.Config{
+		GoogleClientID:     "test-id.apps.googleusercontent.com",
+		GoogleClientSecret: "secret-123",
+	}))
 
-	assert.False(t, repo.IsLoaded())
+	assert.True(t, repo.HasValidConfig())
 }
 
-func TestConfigRepository_IsLoaded_WhenAfterSetConfig_ShouldReturnTrue(t *testing.T) {
+func TestConfigRepository_HasValidConfig_WithoutSpreadsheetID_ShouldStillReturnTrue(t *testing.T) {
 	repo := newTestConfigRepo(t)
-	require.NoError(t, repo.SetConfig(domain.Config{}))
+	require.NoError(t, repo.SetConfig(domain.Config{
+		GoogleClientID:     "test-id.apps.googleusercontent.com",
+		GoogleClientSecret: "secret-123",
+		CallbackPort:       "8081",
+	}))
 
-	assert.True(t, repo.IsLoaded())
+	assert.True(t, repo.HasValidConfig())
+}
+
+func TestConfigRepository_HasValidConfig_WhenMissingClientID_ShouldReturnFalse(t *testing.T) {
+	repo := newTestConfigRepo(t)
+	require.NoError(t, repo.SetConfig(domain.Config{
+		GoogleClientSecret: "secret-123",
+	}))
+
+	assert.False(t, repo.HasValidConfig())
+}
+
+func TestConfigRepository_HasValidConfig_WhenInvalidClientIDSuffix_ShouldReturnFalse(t *testing.T) {
+	repo := newTestConfigRepo(t)
+	require.NoError(t, repo.SetConfig(domain.Config{
+		GoogleClientID:     "test-id-invalid",
+		GoogleClientSecret: "secret-123",
+	}))
+
+	assert.False(t, repo.HasValidConfig())
+}
+
+func TestConfigRepository_HasValidConfig_WhenNotLoaded_ShouldReturnFalse(t *testing.T) {
+	repo := newTestConfigRepo(t)
+
+	assert.False(t, repo.HasValidConfig())
 }
 
 func TestConfigRepository_GetConfig_WhenPersisted_ShouldSurviveNewInstance(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, defines.ConfigPath)
 
-	repo1, err := newConfigRepository(configPath)
-	require.NoError(t, err)
+	repo1 := newTestConfigRepoAt(t, configPath)
 	expected := domain.Config{
 		GoogleClientID:     "persist-id",
 		GoogleClientSecret: "persist-secret",
@@ -195,8 +243,7 @@ func TestConfigRepository_GetConfig_WhenPersisted_ShouldSurviveNewInstance(t *te
 	}
 	require.NoError(t, repo1.SetConfig(expected))
 
-	repo2, err := newConfigRepository(configPath)
-	require.NoError(t, err)
+	repo2 := newTestConfigRepoAt(t, configPath)
 
 	got, err := repo2.GetConfig()
 	require.NoError(t, err)
