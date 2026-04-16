@@ -31,13 +31,7 @@ func TestNewConfigRepository_WhenNewDir_ShouldCreateConfigFile(t *testing.T) {
 	assert.FileExists(t, filepath.Join(configPath, defines.ConfigFilename+".json"))
 }
 
-func TestNewConfigRepository_WhenNewDir_ShouldSetConfigLoadedFalse(t *testing.T) {
-	repo := newTestConfigRepo(t)
-
-	assert.False(t, repo.IsLoaded())
-}
-
-func TestNewConfigRepository_WhenExistingConfig_ShouldSetConfigLoadedTrue(t *testing.T) {
+func TestNewConfigRepository_WhenExistingConfig_ShouldLoadSuccessfully(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, defines.ConfigPath)
 	require.NoError(t, os.MkdirAll(configPath, 0o750))
@@ -47,7 +41,7 @@ func TestNewConfigRepository_WhenExistingConfig_ShouldSetConfigLoadedTrue(t *tes
 	repo, err := newConfigRepository(configPath)
 
 	require.NoError(t, err)
-	assert.True(t, repo.IsLoaded())
+	assert.NotNil(t, repo)
 }
 
 func TestNewConfigRepository_WhenInvalidPath_ShouldReturnError(t *testing.T) {
@@ -72,7 +66,6 @@ func TestConfigRepository_SetConfig_WhenValid_ShouldPersistAndSetLoaded(t *testi
 	err := repo.SetConfig(cfg)
 
 	require.NoError(t, err)
-	assert.True(t, repo.IsLoaded())
 }
 
 func TestConfigRepository_GetConfig_WhenLoaded_ShouldReturnSavedConfig(t *testing.T) {
@@ -166,19 +159,6 @@ func TestConfigRepository_GetGoogleToken_WhenNoTokenSet_ShouldReturnEmptyToken(t
 
 	require.NoError(t, err)
 	assert.Empty(t, got.AccessToken)
-}
-
-func TestConfigRepository_IsLoaded_WhenNewRepo_ShouldReturnFalse(t *testing.T) {
-	repo := newTestConfigRepo(t)
-
-	assert.False(t, repo.IsLoaded())
-}
-
-func TestConfigRepository_IsLoaded_WhenAfterSetConfig_ShouldReturnTrue(t *testing.T) {
-	repo := newTestConfigRepo(t)
-	require.NoError(t, repo.SetConfig(domain.Config{}))
-
-	assert.True(t, repo.IsLoaded())
 }
 
 func TestConfigRepository_GetConfig_WhenPersisted_ShouldSurviveNewInstance(t *testing.T) {

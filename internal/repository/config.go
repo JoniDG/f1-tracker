@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/JoniDG/f1-tracker/internal/defines"
 	"github.com/JoniDG/f1-tracker/internal/domain"
@@ -18,7 +19,7 @@ type ConfigRepository interface {
 	SetGoogleCredentials(token oauth2.Token) error
 	SetConfig(c domain.Config) error
 	GetConfig() (*domain.Config, error)
-	IsLoaded() bool
+	HasValidConfig() bool
 }
 
 type configRepository struct {
@@ -127,6 +128,14 @@ func (r *configRepository) GetConfig() (*domain.Config, error) {
 	return &config, nil
 }
 
-func (r *configRepository) IsLoaded() bool {
-	return r.configLoaded
+func (r *configRepository) HasValidConfig() bool {
+	cfg, err := r.GetConfig()
+	if err != nil {
+		return false
+	}
+
+	return cfg.GoogleClientID != "" &&
+		cfg.GoogleClientSecret != "" &&
+		cfg.SpreadsheetID != "" &&
+		strings.HasSuffix(cfg.GoogleClientID, ".apps.googleusercontent.com")
 }
