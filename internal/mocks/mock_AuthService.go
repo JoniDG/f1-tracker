@@ -25,3 +25,26 @@ func (m *MockAuthService) GetValidToken() (*oauth2.Token, error) {
 	}
 	return args.Get(0).(*oauth2.Token), args.Error(1)
 }
+
+func (m *MockAuthService) HasValidConfig() bool {
+	args := m.Called()
+	return args.Bool(0)
+}
+
+func (m *MockAuthService) HasStoredToken() bool {
+	args := m.Called()
+	return args.Bool(0)
+}
+
+func (m *MockAuthService) GetConfig() (*domain.Config, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Config), args.Error(1)
+}
+
+func (m *MockAuthService) SetConfig(c domain.Config) error {
+	args := m.Called(c)
+	return args.Error(0)
+}
