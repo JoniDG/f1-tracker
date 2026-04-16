@@ -31,7 +31,7 @@ Al ejecutar por primera vez, la app muestra una pantalla de configuracion donde 
 | Google Client ID    | Client ID de OAuth2 (debe terminar en `.apps.googleusercontent.com`) |
 | Google Client Secret| Client Secret de OAuth2                                        |
 | Puerto callback     | Puerto del servidor local para el callback de OAuth (default: `8081`) |
-| Spreadsheet ID      | ID del spreadsheet de Google Sheets (se encuentra en la URL)   |
+| Spreadsheet ID      | (Opcional) ID del spreadsheet de Google Sheets (se encuentra en la URL) |
 
 Despues de guardar la configuracion, la app redirige a la pantalla de login donde se abre el navegador para autorizar con Google.
 
@@ -39,16 +39,18 @@ Despues de guardar la configuracion, la app redirige a la pantalla de login dond
 
 La app usa la API REST de Google Sheets v4 para:
 
+- **Crear spreadsheets** — crea un spreadsheet nuevo desde la app
 - **Leer metadata del spreadsheet** — obtiene la lista de hojas/tabs existentes
 - **Crear hojas** — agrega tabs nuevos via `batchUpdate` (uno por usuario)
 - **Escribir datos** — escribe headers y tiempos de vuelta en las hojas
+- **Validar usernames** — verifica que no haya tabs duplicados antes de crear uno nuevo
 
 Cada usuario tiene su propia hoja/tab en el spreadsheet con el siguiente formato:
 
 | Circuito | Mejor Vuelta | Mejor S1 | Mejor S2 | Mejor S3 | S1 Vuelta | S2 Vuelta | S3 Vuelta | Auto | Fecha |
 |----------|-------------|-----------|-----------|-----------|-----------|-----------|-----------|------|-------|
 
-Al iniciar sesion, la app verifica si la hoja del usuario existe. Si no existe, la crea automaticamente con los headers.
+El SpreadsheetID se puede configurar de dos formas: ingresandolo en la pantalla de configuracion inicial (opcional), o a traves de la pantalla de Sheet Setup donde se puede crear un spreadsheet nuevo o conectar uno existente. Los usernames son unicos por spreadsheet — si un tab con ese nombre ya existe, la app muestra un error.
 
 ## Donde se guardan las credenciales y tokens
 
@@ -116,14 +118,15 @@ internal/
   - `SheetsRepository` — interactua con Google Sheets API v4 (lectura, escritura, creacion de hojas)
 - **service/** — Logica de negocio:
   - `AuthService` — flujo OAuth2+PKCE, refresh de tokens, gestion de config
-  - `TrackerService` — operaciones sobre el spreadsheet (verificar/crear hojas, headers)
+  - `TrackerService` — setup de spreadsheet (crear, conectar), gestion de usuarios (validar username, crear hoja con headers), CRUD de tiempos (pendiente)
 - **ui/** — Interfaz grafica con Fyne (navegacion entre pantallas)
 
 ## Flujo de la aplicacion
 
-1. **Config screen** — Se muestra si no hay credenciales validas configuradas
+1. **Config screen** — Se muestra si no hay credenciales OAuth validas (ClientID, Secret)
 2. **Login screen** — Se muestra si hay credenciales pero no hay token de Google
-3. **Post-login** — Se obtiene info del usuario, se verifica/crea su hoja en el spreadsheet con headers F1, y se muestra la pantalla principal
+3. **Sheet Setup** (pendiente de implementar) — Se muestra si falta SpreadsheetID o Username. Permite crear un spreadsheet nuevo o conectar uno existente, y elegir un username unico
+4. **Menu principal** (pendiente de implementar) — Pantalla principal con acceso a tiempos, formularios y amigos
 
 ## Dependencias
 

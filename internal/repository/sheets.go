@@ -10,7 +10,7 @@ import (
 )
 
 type SheetsRepository interface {
-	GetSheetValues(accessToken, spreadsheetID, sheetName string) error
+	GetSheetValues(accessToken, spreadsheetID, sheetName string) ([][]string, error)
 	GetSpreadsheetData(accessToken, spreadsheetID string) (*domain.SpreadsheetData, error)
 	AddSheet(accessToken, spreadsheetID, sheetName string) error
 	UpdateSheetValues(accessToken, spreadsheetID, rangeValues string, values [][]string) error
@@ -27,29 +27,25 @@ func NewSheetsRepository() SheetsRepository {
 	}
 }
 
-func (r *sheetsRepository) GetSheetValues(accessToken, spreadsheetID, sheetName string) error {
+func (r *sheetsRepository) GetSheetValues(accessToken, spreadsheetID, sheetName string) ([][]string, error) {
 	resp, err := resty.New().R().
 		SetAuthToken(accessToken).
 		SetPathParam("spreadsheetID", spreadsheetID).
 		SetPathParam("sheetName", sheetName).
 		Get(r.baseURL + "/{spreadsheetID}/values/{sheetName}")
 	if err != nil {
-		return fmt.Errorf("calling get sheet values API: %w", err)
+		return nil, fmt.Errorf("calling get sheet values API: %w", err)
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("get sheet values API returned status %d: %s", resp.StatusCode(), resp.String())
+		return nil, fmt.Errorf("get sheet values API returned status %d: %s", resp.StatusCode(), resp.String())
 	}
 
 	var result domain.GetSheetValuesResponse
-	if err := json.Unmarshal(resp.Body(), &result); err != nil {
-		return fmt.Errorf("parsing get sheet values response: %w", err)
+	if err = json.Unmarshal(resp.Body(), &result); err != nil {
+		return nil, fmt.Errorf("parsing get sheet values response: %w", err)
 	}
 
-	for _, row := range result.Values {
-		fmt.Println(row)
-	}
-
-	return nil
+	return result.Values, nil
 }
 func (r *sheetsRepository) GetSpreadsheetData(accessToken, spreadsheetID string) (*domain.SpreadsheetData, error) {
 	resp, err := resty.New().R().
