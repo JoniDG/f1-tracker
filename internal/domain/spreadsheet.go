@@ -140,3 +140,21 @@ type UpdateSheetValuesResponse struct {
 	UpdatedColumns int    `json:"updatedColumns"`
 	UpdatedCells   int    `json:"updatedCells"`
 }
+
+type CreateSpreadsheetRequest struct {
+	Properties CreateSpreadsheetRequestProperties `json:"properties"`
+}
+
+type CreateSpreadsheetRequestProperties struct {
+	Title string `json:"title"`
+}
+
+type CreateSpreadsheetResponse struct {
+	SpreadsheetId string `json:"spreadsheetId"`
+}
+
+type GetSheetValuesResponse struct {
+	Range          string     `json:"range"`
+	MajorDimension string     `json:"majorDimension"`
+	Values         [][]string `json:"values"`
+}
