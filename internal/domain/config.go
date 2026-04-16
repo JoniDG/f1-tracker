@@ -5,4 +5,5 @@ type Config struct {
 	GoogleClientSecret string
 	CallbackPort       string
 	SpreadsheetID      string
+	Username           string
 }
