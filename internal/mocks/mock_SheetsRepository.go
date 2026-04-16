@@ -9,9 +9,12 @@ type MockSheetsRepository struct {
 	mock.Mock
 }
 
-func (m *MockSheetsRepository) GetSheetValues(accessToken, spreadsheetID, sheetName string) error {
+func (m *MockSheetsRepository) GetSheetValues(accessToken, spreadsheetID, sheetName string) ([][]string, error) {
 	args := m.Called(accessToken, spreadsheetID, sheetName)
-	return args.Error(0)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([][]string), args.Error(1)
 }
 
 func (m *MockSheetsRepository) GetSpreadsheetData(accessToken, spreadsheetID string) (*domain.SpreadsheetData, error) {
