@@ -110,7 +110,7 @@ func TestAuthService_BuildOAuthConfig_WhenValidConfig_ShouldReturnConfig(t *test
 	configRepo.AssertExpectations(t)
 }
 
-func TestAuthService_BuildOAuthConfig_WhenEmptyPort_ShouldDefaultTo8881(t *testing.T) {
+func TestAuthService_BuildOAuthConfig_WhenEmptyPort_ShouldDefaultTo8081(t *testing.T) {
 	saveAndRestoreGlobals(t)
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
@@ -123,7 +123,7 @@ func TestAuthService_BuildOAuthConfig_WhenEmptyPort_ShouldDefaultTo8881(t *testi
 	oauthCfg, err := svc.buildOAuthConfig()
 
 	require.NoError(t, err)
-	assert.Equal(t, "http://localhost:8881/callback", oauthCfg.RedirectURL)
+	assert.Equal(t, "http://localhost:8081/callback", oauthCfg.RedirectURL)
 }
 
 func TestAuthService_BuildOAuthConfig_WhenConfigError_ShouldReturnError(t *testing.T) {
@@ -490,7 +490,7 @@ func TestAuthService_Login_WhenFetchUserInfoFails_ShouldReturnError(t *testing.T
 	assert.ErrorContains(t, err, "fetching user info")
 }
 
-func TestAuthService_Login_WhenEmptyPort_ShouldDefaultTo8881(t *testing.T) {
+func TestAuthService_Login_WhenEmptyPort_ShouldDefaultTo8081(t *testing.T) {
 	saveAndRestoreGlobals(t)
 
 	configRepo := new(mocks.MockConfigRepository)

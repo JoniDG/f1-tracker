@@ -75,7 +75,7 @@ func (s *authService) buildOAuthConfig() (*oauth2.Config, error) {
 
 	port := cfg.CallbackPort
 	if port == "" {
-		port = "8881"
+		port = "8081"
 	}
 
 	// oauth2.Config define los parametros de la autenticacion OAuth2:
@@ -141,7 +141,7 @@ func (s *authService) Login() (*domain.User, error) {
 	cfg, _ := s.configRepo.GetConfig()
 	port := cfg.CallbackPort
 	if port == "" {
-		port = "8881"
+		port = "8081"
 	}
 
 	// PKCE (Proof Key for Code Exchange) agrega seguridad al flujo OAuth2:
