@@ -8,18 +8,12 @@ import (
 )
 
 type TrackerService interface {
-	// TODO: Implementar cuando SheetsRepository este listo
-	// GetMyTracks() ([]domain.TrackTime, error)
-	// SaveTrackTime(track domain.TrackTime) error
-	// GetFriendsList() ([]string, error)
-	// GetFriendTracks(name string) ([]domain.TrackTime, error)
-	// EnsureSheetExists() error
-
-	// GetCurrentUser devuelve la info del usuario logueado usando un token valido.
-	// Si el token expiro, lo refresca automaticamente via AuthService.
 	GetCurrentUser() (*domain.User, error)
-	GetSheet() error
-	EnsureSheetExists(sheetName string) error
+	CreateSpreadsheet(title string) (string, error)
+	SaveSpreadsheetID(spreadsheetID string) error
+	IsUsernameAvailable(username string) (bool, error)
+	SetupUser(username string) error
+	NeedsSheetSetup() bool
 }
 
 type trackerService struct {
@@ -49,41 +43,12 @@ func (s *trackerService) GetCurrentUser() (*domain.User, error) {
 	return s.userRepo.GetUserInfo(token.AccessToken)
 }
 
-func (s *trackerService) GetSheet() error {
-	// GetValidToken verifica si el token expiro y lo refresca si es necesario
+func (s *trackerService) CreateSpreadsheet(title string) (string, error) {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
-		return err
+		return "", err
 	}
-	cfg, err := s.configRepo.GetConfig()
-	if err != nil {
-		return err
-	}
-	return s.sheetsRepo.GetSheetValues(token.AccessToken, cfg.SpreadsheetID, "Hoja 1")
-}
-
-func (s *trackerService) EnsureSheetExists(sheetName string) error {
-	// GetValidToken verifica si el token expiro y lo refresca si es necesario
-	token, err := s.authSvc.GetValidToken()
-	if err != nil {
-		return err
-	}
-	cfg, err := s.configRepo.GetConfig()
-	if err != nil {
-		return err
-	}
-	sheetNames, err := s.GetSheetNames(token.AccessToken, cfg.SpreadsheetID)
-	if err != nil {
-		return err
-	}
-	if !sheetNames[sheetName] {
-		err = s.CreateSheet(token.AccessToken, cfg.SpreadsheetID, sheetName)
-		if err != nil {
-			return err
-		}
-	}
-	log.Printf("La hoja %s ya existe\n", sheetName)
-	return nil
+	return s.sheetsRepo.CreateSpreadsheet(token.AccessToken, title)
 }
 
 func (s *trackerService) GetSheetNames(token, spreadsheetID string) (map[string]bool, error) {
@@ -113,4 +78,63 @@ func (s *trackerService) CreateSheet(token, spreadsheetID, userName string) erro
 	}
 	log.Printf("Hoja %s creada con headers\n", userName)
 	return nil
+}
+func (s *trackerService) SaveSpreadsheetID(spreadsheetID string) error {
+	cfg, err := s.configRepo.GetConfig()
+	if err != nil {
+		return err
+	}
+	cfg.SpreadsheetID = spreadsheetID
+	err = s.configRepo.SetConfig(*cfg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (s *trackerService) IsUsernameAvailable(userName string) (bool, error) {
+	// GetValidToken verifica si el token expiro y lo refresca si es necesario
+	token, err := s.authSvc.GetValidToken()
+	if err != nil {
+		return false, err
+	}
+	cfg, err := s.configRepo.GetConfig()
+	if err != nil {
+		return false, err
+	}
+	sheetNames, err := s.GetSheetNames(token.AccessToken, cfg.SpreadsheetID)
+	if err != nil {
+		return false, err
+	}
+	if sheetNames[userName] {
+		log.Printf("La hoja %s ya existe\n", userName)
+		return false, nil
+	}
+	return true, nil
+}
+func (s *trackerService) SetupUser(userName string) error {
+	token, err := s.authSvc.GetValidToken()
+	if err != nil {
+		return err
+	}
+	cfg, err := s.configRepo.GetConfig()
+	if err != nil {
+		return err
+	}
+	cfg.Username = userName
+	err = s.configRepo.SetConfig(*cfg)
+	if err != nil {
+		return err
+	}
+	err = s.CreateSheet(token.AccessToken, cfg.SpreadsheetID, userName)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (s *trackerService) NeedsSheetSetup() bool {
+	cfg, err := s.configRepo.GetConfig()
+	if err != nil {
+		return true
+	}
+	return cfg.SpreadsheetID == "" || cfg.Username == ""
 }
