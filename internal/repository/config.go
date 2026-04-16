@@ -36,12 +36,8 @@ func NewConfigRepository() (ConfigRepository, error) {
 
 	// Arma el path completo: ~/.config/f1-tracker/
 	configPath := filepath.Join(userConfigDir, defines.ConfigPath)
-	return newConfigRepository(configPath)
-}
-
-func newConfigRepository(configPath string) (ConfigRepository, error) {
 	// Crea el directorio (y cualquier padre faltante) con permisos rwxr-xr-x
-	if err := os.MkdirAll(configPath, 0o750); err != nil {
+	if err = os.MkdirAll(configPath, 0o750); err != nil {
 		return nil, fmt.Errorf("creating config dir: %w", err)
 	}
 
@@ -60,14 +56,14 @@ func newConfigRepository(configPath string) (ConfigRepository, error) {
 	}
 
 	// Intenta leer el archivo de config existente y cargarlo en memoria
-	if err := v.ReadInConfig(); err != nil {
+	if err = v.ReadInConfig(); err != nil {
 		// Si el error es que no existe el archivo, lo creamos; cualquier otro error es fatal
 		var notFoundErr viper.ConfigFileNotFoundError
 		if !errors.As(err, &notFoundErr) {
 			return nil, fmt.Errorf("reading config file: %w", err)
 		}
 		// SafeWriteConfig crea el archivo solo si no existe (no sobreescribe uno existente)
-		if err := v.SafeWriteConfig(); err != nil {
+		if err = v.SafeWriteConfig(); err != nil {
 			return nil, fmt.Errorf("creating initial config file: %w", err)
 		}
 		cr.configLoaded = false
@@ -136,6 +132,5 @@ func (r *configRepository) HasValidConfig() bool {
 
 	return cfg.GoogleClientID != "" &&
 		cfg.GoogleClientSecret != "" &&
-		cfg.SpreadsheetID != "" &&
 		strings.HasSuffix(cfg.GoogleClientID, ".apps.googleusercontent.com")
 }
