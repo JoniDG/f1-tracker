@@ -4,6 +4,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/JoniDG/f1-tracker/internal/defines"
 	"github.com/JoniDG/f1-tracker/internal/domain"
 	"github.com/JoniDG/f1-tracker/internal/mocks"
 	"github.com/stretchr/testify/assert"
@@ -208,11 +209,14 @@ func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", domain.Config{GoogleClientID: "test-id", SpreadsheetID: "sheet-123", Username: "JoniDG"}).Return(nil)
 	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "JoniDG").Return(nil)
-	headers := [][]string{{
+	rows := [][]string{{
 		"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3",
 		"S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha",
 	}}
-	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A1:J1", headers).Return(nil)
+	for _, track := range defines.Tracks {
+		rows = append(rows, []string{track, "", "", "", "", "", "", "", "", ""})
+	}
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A1:J25", rows).Return(nil)
 
 	err := svc.SetupUser("JoniDG")
 
@@ -270,4 +274,268 @@ func TestTrackerService_NeedsSheetSetup_WhenConfigError_ShouldReturnTrue(t *test
 	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
 
 	assert.True(t, svc.NeedsSheetSetup())
+}
+
+func TestTrackerService_GetMyTracks_WhenSuccess_ShouldReturnTracks(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	values := [][]string{
+		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
+		{"Bahrain", "1:23.456", "0:28.100", "0:27.200", "0:28.156", "0:28.100", "0:27.200", "0:28.156", "Ferrari", "2026-04-09"},
+		{"Saudi Arabia"},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(values, nil)
+
+	tracks, err := svc.GetMyTracks()
+
+	require.NoError(t, err)
+	assert.Len(t, tracks, 2)
+	assert.Equal(t, "Bahrain", tracks[0].TrackName)
+	assert.Equal(t, "1:23.456", tracks[0].BestLapTime)
+	assert.Equal(t, "Ferrari", tracks[0].Car)
+	assert.Equal(t, "Saudi Arabia", tracks[1].TrackName)
+	assert.Empty(t, tracks[1].BestLapTime)
+}
+
+func TestTrackerService_GetMyTracks_WhenOnlyHeaders_ShouldReturnEmpty(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	values := [][]string{
+		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(values, nil)
+
+	tracks, err := svc.GetMyTracks()
+
+	require.NoError(t, err)
+	assert.Empty(t, tracks)
+}
+
+func TestTrackerService_GetMyTracks_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	tracks, err := svc.GetMyTracks()
+
+	assert.Nil(t, tracks)
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_SaveTrackTime_WhenSuccess_ShouldWriteRow(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+
+	track := domain.TrackTime{
+		TrackName: "Bahrain", BestLapTime: "1:23.456",
+		BestS1: "0:28.1", BestS2: "0:27.2", BestS3: "0:28.1",
+		LapS1: "0:28.1", LapS2: "0:27.2", LapS3: "0:28.1",
+		Car: "Ferrari", Date: "2026-04-09",
+	}
+	expectedRow := [][]string{{
+		"Bahrain", "1:23.456", "0:28.1", "0:27.2", "0:28.1",
+		"0:28.1", "0:27.2", "0:28.1", "Ferrari", "2026-04-09",
+	}}
+
+	// Bahrain es indice 0 en defines.Tracks -> fila 2
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A2:J2", expectedRow).Return(nil)
+
+	err := svc.SaveTrackTime(track)
+
+	require.NoError(t, err)
+	sheetsRepo.AssertExpectations(t)
+}
+
+func TestTrackerService_SaveTrackTime_WhenInvalidTrack_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	track := domain.TrackTime{TrackName: "Circuito Inexistente"}
+
+	err := svc.SaveTrackTime(track)
+
+	assert.ErrorContains(t, err, "circuito no encontrado")
+}
+
+func TestTrackerService_SaveTrackTime_WhenLastTrack_ShouldUseCorrectRow(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+
+	track := domain.TrackTime{TrackName: "Abu Dhabi", BestLapTime: "1:30.000"}
+	expectedRow := [][]string{{"Abu Dhabi", "1:30.000", "", "", "", "", "", "", "", ""}}
+
+	// Abu Dhabi es indice 23 en defines.Tracks -> fila 25
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A25:J25", expectedRow).Return(nil)
+
+	err := svc.SaveTrackTime(track)
+
+	require.NoError(t, err)
+	sheetsRepo.AssertExpectations(t)
+}
+
+func TestTrackerService_GetFriendsList_WhenFriendsExist_ShouldReturnFiltered(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	spreadsheetData := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{Title: "JoniDG"}},
+			{Properties: domain.SheetDataProperties{Title: "Amigo1"}},
+			{Properties: domain.SheetDataProperties{Title: "Amigo2"}},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(spreadsheetData, nil)
+
+	friends, err := svc.GetFriendsList()
+
+	require.NoError(t, err)
+	assert.Len(t, friends, 2)
+	assert.Contains(t, friends, "Amigo1")
+	assert.Contains(t, friends, "Amigo2")
+	assert.NotContains(t, friends, "JoniDG")
+}
+
+func TestTrackerService_GetFriendsList_WhenNoFriends_ShouldReturnEmpty(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	spreadsheetData := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{Title: "JoniDG"}},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(spreadsheetData, nil)
+
+	friends, err := svc.GetFriendsList()
+
+	require.NoError(t, err)
+	assert.Empty(t, friends)
+}
+
+func TestTrackerService_GetFriendTracks_WhenSuccess_ShouldReturnTracks(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	values := [][]string{
+		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
+		{"Bahrain", "1:25.000", "", "", "", "", "", "", "McLaren", "2026-04-10"},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "Amigo1").Return(values, nil)
+
+	tracks, err := svc.GetFriendTracks("Amigo1")
+
+	require.NoError(t, err)
+	assert.Len(t, tracks, 1)
+	assert.Equal(t, "Bahrain", tracks[0].TrackName)
+	assert.Equal(t, "McLaren", tracks[0].Car)
+}
+
+func TestTrackerService_GetFriendTracks_WhenOnlyHeaders_ShouldReturnEmpty(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	values := [][]string{
+		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "AmigoSinDatos").Return(values, nil)
+
+	tracks, err := svc.GetFriendTracks("AmigoSinDatos")
+
+	require.NoError(t, err)
+	assert.Empty(t, tracks)
+}
+
+func TestTrackerService_GetFriendTracks_WhenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "Amigo1").Return(nil, errors.New("API error"))
+
+	tracks, err := svc.GetFriendTracks("Amigo1")
+
+	assert.Nil(t, tracks)
+	assert.EqualError(t, err, "API error")
 }
