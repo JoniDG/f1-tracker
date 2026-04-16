@@ -195,6 +195,118 @@ func TestTrackerService_IsUsernameAvailable_WhenTaken_ShouldReturnFalse(t *testi
 	assert.False(t, available)
 }
 
+func TestTrackerService_IsUsernameAvailable_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	available, err := svc.IsUsernameAvailable("JoniDG")
+
+	assert.False(t, available)
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_IsUsernameAvailable_WhenConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
+
+	available, err := svc.IsUsernameAvailable("JoniDG")
+
+	assert.False(t, available)
+	assert.EqualError(t, err, "config error")
+}
+
+func TestTrackerService_SetupUser_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	err := svc.SetupUser("JoniDG")
+
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_SetupUser_WhenConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
+
+	err := svc.SetupUser("JoniDG")
+
+	assert.EqualError(t, err, "config error")
+}
+
+func TestTrackerService_SetupUser_WhenSetConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}).Return(errors.New("write error"))
+
+	err := svc.SetupUser("JoniDG")
+
+	assert.EqualError(t, err, "write error")
+}
+
+func TestTrackerService_GetFriendsList_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	friends, err := svc.GetFriendsList()
+
+	assert.Nil(t, friends)
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_GetFriendsList_WhenConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
+
+	friends, err := svc.GetFriendsList()
+
+	assert.Nil(t, friends)
+	assert.EqualError(t, err, "config error")
+}
+
 func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *testing.T) {
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
@@ -329,6 +441,42 @@ func TestTrackerService_GetMyTracks_WhenOnlyHeaders_ShouldReturnEmpty(t *testing
 	assert.Empty(t, tracks)
 }
 
+func TestTrackerService_GetMyTracks_WhenConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
+
+	tracks, err := svc.GetMyTracks()
+
+	assert.Nil(t, tracks)
+	assert.EqualError(t, err, "config error")
+}
+
+func TestTrackerService_GetMyTracks_WhenSheetError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(nil, errors.New("API error"))
+
+	tracks, err := svc.GetMyTracks()
+
+	assert.Nil(t, tracks)
+	assert.EqualError(t, err, "API error")
+}
+
 func TestTrackerService_GetMyTracks_WhenTokenError_ShouldReturnError(t *testing.T) {
 	authSvc := new(mocks.MockAuthService)
 	configRepo := new(mocks.MockConfigRepository)
@@ -375,6 +523,38 @@ func TestTrackerService_SaveTrackTime_WhenSuccess_ShouldWriteRow(t *testing.T) {
 
 	require.NoError(t, err)
 	sheetsRepo.AssertExpectations(t)
+}
+
+func TestTrackerService_SaveTrackTime_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	track := domain.TrackTime{TrackName: "Bahrain"}
+	err := svc.SaveTrackTime(track)
+
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_SaveTrackTime_WhenConfigError_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
+
+	track := domain.TrackTime{TrackName: "Bahrain"}
+	err := svc.SaveTrackTime(track)
+
+	assert.EqualError(t, err, "config error")
 }
 
 func TestTrackerService_SaveTrackTime_WhenInvalidTrack_ShouldReturnError(t *testing.T) {

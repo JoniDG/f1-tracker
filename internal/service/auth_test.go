@@ -510,3 +510,78 @@ func TestAuthService_Login_WhenEmptyPort_ShouldDefaultTo8081(t *testing.T) {
 	assert.Nil(t, user)
 	assert.ErrorContains(t, err, "opening browser")
 }
+
+// --- HasValidConfig ---
+
+func TestAuthService_HasValidConfig_WhenTrue_ShouldReturnTrue(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	configRepo.On("HasValidConfig").Return(true)
+
+	assert.True(t, svc.HasValidConfig())
+}
+
+func TestAuthService_HasValidConfig_WhenFalse_ShouldReturnFalse(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	configRepo.On("HasValidConfig").Return(false)
+
+	assert.False(t, svc.HasValidConfig())
+}
+
+// --- HasStoredToken ---
+
+func TestAuthService_HasStoredToken_WhenTokenExists_ShouldReturnTrue(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	token := &oauth2.Token{AccessToken: "test"}
+	configRepo.On("GetGoogleToken").Return(token, nil)
+
+	assert.True(t, svc.HasStoredToken())
+}
+
+func TestAuthService_HasStoredToken_WhenNoToken_ShouldReturnFalse(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	configRepo.On("GetGoogleToken").Return(nil, errors.New("no token"))
+
+	assert.False(t, svc.HasStoredToken())
+}
+
+// --- GetConfig / SetConfig ---
+
+func TestAuthService_GetConfig_ShouldDelegateToRepo(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	expected := &domain.Config{GoogleClientID: "test-id"}
+	configRepo.On("GetConfig").Return(expected, nil)
+
+	cfg, err := svc.GetConfig()
+
+	require.NoError(t, err)
+	assert.Equal(t, "test-id", cfg.GoogleClientID)
+}
+
+func TestAuthService_SetConfig_ShouldDelegateToRepo(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	cfg := domain.Config{GoogleClientID: "test-id"}
+	configRepo.On("SetConfig", cfg).Return(nil)
+
+	err := svc.SetConfig(cfg)
+
+	require.NoError(t, err)
+	configRepo.AssertExpectations(t)
+}
