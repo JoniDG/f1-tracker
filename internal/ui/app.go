@@ -93,12 +93,4 @@ func (fa *FyneApp) showSuccessScreen(user *domain.User) {
 			),
 		),
 	)
-
-	err := fa.trackerSvc.EnsureSheetExists("JoniDG")
-	if err != nil {
-		log.Printf("Error: %v", err)
-	}
-
-	/*err := fa.trackerSvc.GetSheet()
-	 */
 }

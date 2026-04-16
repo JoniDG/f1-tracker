@@ -60,7 +60,7 @@ func NewConfigScreen(window fyne.Window, authSvc service.AuthService, onSave fun
 		clientSecretEntry,
 		widget.NewLabel("Puerto callback"),
 		portEntry,
-		widget.NewLabel("Spreadsheet ID"),
+		widget.NewLabel("Spreadsheet ID (opcional)"),
 		spreadsheetEntry,
 		widget.NewSeparator(),
 		saveBtn,
