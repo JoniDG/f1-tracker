@@ -23,10 +23,10 @@ type TrackerService interface {
 }
 
 type trackerService struct {
-	authSvc    AuthService                 // para obtener un token valido (y refrescarlo si expiro)
-	configRepo repository.ConfigRepository // para leer el spreadsheet ID y otros datos de config
-	userRepo   repository.UserRepository   // para consultar info del usuario a la API de Google
-	sheetsRepo repository.SheetsRepository // para consultar y guardar datos en el spreadsheet
+	authSvc    AuthService
+	configRepo repository.ConfigRepository
+	userRepo   repository.UserRepository
+	sheetsRepo repository.SheetsRepository
 }
 
 func NewTrackerService(authSvc AuthService, configRepo repository.ConfigRepository, userRepo repository.UserRepository, sheetsRepo repository.SheetsRepository) TrackerService {
@@ -39,15 +39,14 @@ func NewTrackerService(authSvc AuthService, configRepo repository.ConfigReposito
 }
 
 func (s *trackerService) GetCurrentUser() (*domain.User, error) {
-	// GetValidToken verifica si el token expiro y lo refresca si es necesario
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
 		return nil, err
 	}
 
-	// Consulta la API de Google con el token valido para obtener nombre y email
 	return s.userRepo.GetUserInfo(token.AccessToken)
 }
+
 func (s *trackerService) CreateSpreadsheet(title string) (string, error) {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
@@ -55,6 +54,7 @@ func (s *trackerService) CreateSpreadsheet(title string) (string, error) {
 	}
 	return s.sheetsRepo.CreateSpreadsheet(token.AccessToken, title)
 }
+
 func (s *trackerService) GetSheetNames(token, spreadsheetID string) (map[string]bool, error) {
 	r, err := s.sheetsRepo.GetSpreadsheetData(token, spreadsheetID)
 	if err != nil {
@@ -66,6 +66,7 @@ func (s *trackerService) GetSheetNames(token, spreadsheetID string) (map[string]
 	}
 	return sheetNames, nil
 }
+
 func (s *trackerService) CreateSheet(token, spreadsheetID, userName string) error {
 	log.Printf("Se debe crear la hoja %s\n", userName)
 	err := s.sheetsRepo.AddSheet(token, spreadsheetID, userName)
@@ -89,6 +90,7 @@ func (s *trackerService) CreateSheet(token, spreadsheetID, userName string) erro
 	log.Printf("Hoja %s creada con headers y %d circuitos\n", userName, len(defines.Tracks))
 	return nil
 }
+
 func (s *trackerService) SaveSpreadsheetID(spreadsheetID string) error {
 	cfg, err := s.configRepo.GetConfig()
 	if err != nil {
@@ -101,8 +103,8 @@ func (s *trackerService) SaveSpreadsheetID(spreadsheetID string) error {
 	}
 	return nil
 }
+
 func (s *trackerService) IsUsernameAvailable(userName string) (bool, error) {
-	// GetValidToken verifica si el token expiro y lo refresca si es necesario
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
 		return false, err
@@ -121,6 +123,7 @@ func (s *trackerService) IsUsernameAvailable(userName string) (bool, error) {
 	}
 	return true, nil
 }
+
 func (s *trackerService) SetupUser(userName string) error {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
@@ -141,6 +144,7 @@ func (s *trackerService) SetupUser(userName string) error {
 	}
 	return nil
 }
+
 func (s *trackerService) NeedsSheetSetup() bool {
 	cfg, err := s.configRepo.GetConfig()
 	if err != nil {
@@ -148,6 +152,7 @@ func (s *trackerService) NeedsSheetSetup() bool {
 	}
 	return cfg.SpreadsheetID == "" || cfg.Username == ""
 }
+
 func (s *trackerService) GetMyTracks() ([]domain.TrackTime, error) {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
@@ -185,7 +190,7 @@ func (s *trackerService) SaveTrackTime(track domain.TrackTime) error {
 		return err
 	}
 
-	row := trackIndex + 2 // fila 1 = headers, filas empiezan en 1
+	row := trackIndex + 2
 	rangeStr := fmt.Sprintf("%s!A%d:J%d", cfg.Username, row, row)
 	values := [][]string{trackTimeToRow(track)}
 
@@ -234,7 +239,7 @@ func (s *trackerService) GetFriendTracks(friendName string) ([]domain.TrackTime,
 func parseRows(values [][]string) []domain.TrackTime {
 	var tracks []domain.TrackTime
 	for i, row := range values {
-		if i == 0 { // skip headers
+		if i == 0 {
 			continue
 		}
 		if len(row) == 0 {

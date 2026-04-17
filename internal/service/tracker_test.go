@@ -516,7 +516,6 @@ func TestTrackerService_SaveTrackTime_WhenSuccess_ShouldWriteRow(t *testing.T) {
 		"0:28.1", "0:27.2", "0:28.1", "Ferrari", "2026-04-09",
 	}}
 
-	// Bahrain es indice 0 en defines.Tracks -> fila 2
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A2:J2", expectedRow).Return(nil)
 
 	err := svc.SaveTrackTime(track)
@@ -587,7 +586,6 @@ func TestTrackerService_SaveTrackTime_WhenLastTrack_ShouldUseCorrectRow(t *testi
 	track := domain.TrackTime{TrackName: "Abu Dhabi", BestLapTime: "1:30.000"}
 	expectedRow := [][]string{{"Abu Dhabi", "1:30.000", "", "", "", "", "", "", "", ""}}
 
-	// Abu Dhabi es indice 23 en defines.Tracks -> fila 25
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A25:J25", expectedRow).Return(nil)
 
 	err := svc.SaveTrackTime(track)

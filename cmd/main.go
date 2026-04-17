@@ -19,7 +19,6 @@ func main() {
 	authSvc := service.NewAuthService(configRepo, userRepo)
 	trackerSvc := service.NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
-	// Crea y ejecuta la app de Fyne (decide que pantalla mostrar segun el estado de config/token)
 	fyneApp := ui.NewFyneApp(authSvc, trackerSvc)
 	fyneApp.Run()
 }

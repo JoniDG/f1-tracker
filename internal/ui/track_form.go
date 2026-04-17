@@ -47,7 +47,6 @@ func NewTrackFormScreen(window fyne.Window, trackerSvc service.TrackerService, o
 	var selectedTrack string
 	trackSelect := widget.NewSelect(defines.Tracks, func(selected string) {
 		selectedTrack = selected
-		// Cargar datos existentes en goroutine
 		go func() {
 			tracks, err := trackerSvc.GetMyTracks()
 			if err != nil {
@@ -70,7 +69,6 @@ func NewTrackFormScreen(window fyne.Window, trackerSvc service.TrackerService, o
 						return
 					}
 				}
-				// Si no tiene datos previos, limpiar
 				for _, e := range entries[:8] {
 					e.SetText("")
 				}
