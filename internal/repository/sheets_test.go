@@ -17,8 +17,6 @@ func TestNewSheetsRepository_ShouldReturnInstance(t *testing.T) {
 	assert.NotNil(t, repo)
 }
 
-// --- GetSheetValues ---
-
 func TestSheetsRepository_GetSheetValues_WhenSuccess_ShouldReturnValues(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
@@ -77,8 +75,6 @@ func TestSheetsRepository_GetSheetValues_WhenServerDown_ShouldReturnError(t *tes
 	assert.Nil(t, values)
 	assert.ErrorContains(t, err, "calling get sheet values API")
 }
-
-// --- GetSpreadsheetData ---
 
 func TestSheetsRepository_GetSpreadsheetData_WhenSuccess_ShouldReturnData(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -140,8 +136,6 @@ func TestSheetsRepository_GetSpreadsheetData_WhenServerDown_ShouldReturnError(t 
 	assert.ErrorContains(t, err, "calling get spreadsheet data API")
 }
 
-// --- AddSheet ---
-
 func TestSheetsRepository_AddSheet_WhenSuccess_ShouldReturnNil(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
@@ -191,8 +185,6 @@ func TestSheetsRepository_AddSheet_WhenServerDown_ShouldReturnError(t *testing.T
 
 	assert.ErrorContains(t, err, "calling add sheet API")
 }
-
-// --- UpdateSheetValues ---
 
 func TestSheetsRepository_UpdateSheetValues_WhenSuccess_ShouldReturnNil(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -244,8 +236,6 @@ func TestSheetsRepository_UpdateSheetValues_WhenServerDown_ShouldReturnError(t *
 
 	assert.ErrorContains(t, err, "calling update sheet values API")
 }
-
-// --- CreateSpreadsheet ---
 
 func TestSheetsRepository_CreateSpreadsheet_WhenSuccess_ShouldReturnID(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

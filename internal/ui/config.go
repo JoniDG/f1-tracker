@@ -23,7 +23,6 @@ func NewConfigScreen(window fyne.Window, authSvc service.AuthService, onSave fun
 	spreadsheetEntry := widget.NewEntry()
 	spreadsheetEntry.SetPlaceHolder("Spreadsheet ID")
 
-	// Pre-llenar si ya existe config
 	if cfg, err := authSvc.GetConfig(); err == nil {
 		clientIDEntry.SetText(cfg.GoogleClientID)
 		clientSecretEntry.SetText(cfg.GoogleClientSecret)

@@ -16,7 +16,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// saveAndRestoreGlobals saves the package-level vars and restores them after the test.
 func saveAndRestoreGlobals(t *testing.T) {
 	t.Helper()
 	origBrowserOpen := browserOpenFunc
@@ -36,7 +35,6 @@ func defaultTestConfig() *domain.Config {
 	}
 }
 
-// fakeTokenServer creates an httptest server that returns a valid OAuth token response.
 func fakeTokenServer(t *testing.T, accessToken string) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -52,7 +50,6 @@ func fakeTokenServer(t *testing.T, accessToken string) *httptest.Server {
 	}))
 }
 
-// fakeErrorTokenServer creates an httptest server that returns an OAuth error.
 func fakeErrorTokenServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -63,7 +60,6 @@ func fakeErrorTokenServer(t *testing.T) *httptest.Server {
 	}))
 }
 
-// simulateCallback sends an HTTP GET to the local callback server and asserts success.
 func simulateCallback(t *testing.T, port, query string, expectedStatus int) {
 	t.Helper()
 	require.Eventually(t, func() bool {
@@ -77,8 +73,6 @@ func simulateCallback(t *testing.T, port, query string, expectedStatus int) {
 	}, 3*time.Second, 50*time.Millisecond)
 }
 
-// --- NewAuthService ---
-
 func TestNewAuthService_ShouldReturnInstance(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
@@ -87,8 +81,6 @@ func TestNewAuthService_ShouldReturnInstance(t *testing.T) {
 
 	assert.NotNil(t, svc)
 }
-
-// --- buildOAuthConfig ---
 
 func TestAuthService_BuildOAuthConfig_WhenValidConfig_ShouldReturnConfig(t *testing.T) {
 	saveAndRestoreGlobals(t)
@@ -139,8 +131,6 @@ func TestAuthService_BuildOAuthConfig_WhenConfigError_ShouldReturnError(t *testi
 	assert.Nil(t, oauthCfg)
 	assert.ErrorContains(t, err, "reading config")
 }
-
-// --- GetValidToken ---
 
 func TestAuthService_GetValidToken_WhenTokenNotExpired_ShouldReturnStoredToken(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)
@@ -280,8 +270,6 @@ func TestAuthService_GetValidToken_WhenSaveRefreshedTokenFails_ShouldReturnError
 	assert.Nil(t, got)
 	assert.ErrorContains(t, err, "saving refreshed token")
 }
-
-// --- Login ---
 
 func TestAuthService_Login_WhenBuildOAuthConfigFails_ShouldReturnError(t *testing.T) {
 	saveAndRestoreGlobals(t)
@@ -511,8 +499,6 @@ func TestAuthService_Login_WhenEmptyPort_ShouldDefaultTo8081(t *testing.T) {
 	assert.ErrorContains(t, err, "opening browser")
 }
 
-// --- HasValidConfig ---
-
 func TestAuthService_HasValidConfig_WhenTrue_ShouldReturnTrue(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
@@ -532,8 +518,6 @@ func TestAuthService_HasValidConfig_WhenFalse_ShouldReturnFalse(t *testing.T) {
 
 	assert.False(t, svc.HasValidConfig())
 }
-
-// --- HasStoredToken ---
 
 func TestAuthService_HasStoredToken_WhenTokenExists_ShouldReturnTrue(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)
@@ -555,8 +539,6 @@ func TestAuthService_HasStoredToken_WhenNoToken_ShouldReturnFalse(t *testing.T) 
 
 	assert.False(t, svc.HasStoredToken())
 }
-
-// --- GetConfig / SetConfig ---
 
 func TestAuthService_GetConfig_ShouldDelegateToRepo(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)

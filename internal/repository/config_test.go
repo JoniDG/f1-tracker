@@ -70,7 +70,6 @@ func TestNewConfigRepository_WhenExistingConfig_ShouldLoadSuccessfully(t *testin
 func TestNewConfigRepository_WhenInvalidPath_ShouldReturnError(t *testing.T) {
 	repo, err := NewConfigRepository()
 
-	// No error expected in normal environment, just verify it works
 	if err == nil {
 		assert.NotNil(t, repo)
 	}
