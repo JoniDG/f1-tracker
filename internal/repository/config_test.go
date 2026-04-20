@@ -75,6 +75,52 @@ func TestNewConfigRepository_WhenInvalidPath_ShouldReturnError(t *testing.T) {
 	}
 }
 
+func TestNewConfigRepository_WhenUserConfigDirFails_ShouldReturnError(t *testing.T) {
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("AppData", "")
+
+	repo, err := NewConfigRepository()
+	if err == nil {
+		t.Skip("runtime exposes a config dir on this platform; skipping")
+	}
+	assert.Nil(t, repo)
+	assert.ErrorContains(t, err, "getting user config dir")
+}
+
+func TestNewConfigRepository_WhenMkdirFails_ShouldReturnError(t *testing.T) {
+	tmp := t.TempDir()
+	blocker := filepath.Join(tmp, "Library")
+	require.NoError(t, os.WriteFile(blocker, []byte("not a dir"), 0o600))
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", blocker)
+
+	repo, err := NewConfigRepository()
+	if err == nil {
+		t.Skip("platform did not hit the MkdirAll error path")
+	}
+	assert.Nil(t, repo)
+	assert.ErrorContains(t, err, "creating config dir")
+}
+
+func TestNewConfigRepository_WhenCorruptJSON_ShouldReturnError(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	userCfgDir, err := os.UserConfigDir()
+	require.NoError(t, err)
+	cfgPath := filepath.Join(userCfgDir, defines.ConfigPath)
+	require.NoError(t, os.MkdirAll(cfgPath, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(cfgPath, defines.ConfigFilename+".json"), []byte(`{bad json`), 0o600))
+
+	repo, err := NewConfigRepository()
+
+	assert.Nil(t, repo)
+	assert.ErrorContains(t, err, "reading config file")
+}
+
 func TestConfigRepository_SetConfig_WhenValid_ShouldPersistAndSetLoaded(t *testing.T) {
 	repo := newTestConfigRepo(t)
 

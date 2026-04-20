@@ -30,6 +30,11 @@ func (m *MockSheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName st
 	return args.Error(0)
 }
 
+func (m *MockSheetsRepository) DeleteSheet(accessToken, spreadsheetID string, sheetID int) error {
+	args := m.Called(accessToken, spreadsheetID, sheetID)
+	return args.Error(0)
+}
+
 func (m *MockSheetsRepository) UpdateSheetValues(accessToken, spreadsheetID, rangeValues string, values [][]string) error {
 	args := m.Called(accessToken, spreadsheetID, rangeValues, values)
 	return args.Error(0)

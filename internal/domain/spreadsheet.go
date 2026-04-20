@@ -80,7 +80,12 @@ type BatchUpdateRequest struct {
 }
 
 type BatchRequest struct {
-	AddSheet *AddSheetRequest `json:"addSheet,omitempty"`
+	AddSheet    *AddSheetRequest    `json:"addSheet,omitempty"`
+	DeleteSheet *DeleteSheetRequest `json:"deleteSheet,omitempty"`
+}
+
+type DeleteSheetRequest struct {
+	SheetId int `json:"sheetId"`
 }
 
 type AddSheetRequest struct {

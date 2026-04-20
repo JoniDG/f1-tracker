@@ -2,6 +2,8 @@ package ui
 
 import (
 	"fmt"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -13,15 +15,42 @@ import (
 	"github.com/JoniDG/f1-tracker/internal/service"
 )
 
+var spreadsheetIDRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{25,}$`)
+
 func NewSheetSetupScreen(window fyne.Window, authSvc service.AuthService, trackerSvc service.TrackerService, user *domain.User, onComplete func()) fyne.CanvasObject {
 	contentBox := container.NewVBox()
 
-	cfg, _ := authSvc.GetConfig()
-	if cfg == nil || cfg.SpreadsheetID == "" {
-		showSpreadsheetConnectionUI(window, trackerSvc, user, contentBox, onComplete)
-	} else {
-		showUsernameUI(window, trackerSvc, user, contentBox, onComplete)
+	var render func()
+	var onBack func()
+
+	render = func() {
+		contentBox.RemoveAll()
+		cfg, err := authSvc.GetConfig()
+		if err != nil {
+			dialog.ShowError(fmt.Errorf("no se pudo leer la configuracion: %w", err), window)
+			contentBox.Add(widget.NewLabel("Error al leer la configuracion."))
+			contentBox.Add(widget.NewButton("Reintentar", render))
+			contentBox.Refresh()
+			return
+		}
+		if cfg == nil || cfg.SpreadsheetID == "" {
+			showSpreadsheetConnectionUI(window, authSvc, trackerSvc, user, contentBox, onBack, onComplete)
+		} else {
+			showUsernameUI(window, trackerSvc, user, contentBox, false, cfg.Username, onBack, onComplete)
+		}
+		contentBox.Refresh()
 	}
+
+	onBack = func() {
+		cfg, err := authSvc.GetConfig()
+		if err == nil && cfg != nil {
+			cfg.SpreadsheetID = ""
+			_ = authSvc.SetConfig(*cfg)
+		}
+		render()
+	}
+
+	render()
 
 	return container.NewCenter(
 		container.NewVBox(
@@ -32,7 +61,7 @@ func NewSheetSetupScreen(window fyne.Window, authSvc service.AuthService, tracke
 	)
 }
 
-func showSpreadsheetConnectionUI(window fyne.Window, trackerSvc service.TrackerService, user *domain.User, contentBox *fyne.Container, onComplete func()) {
+func showSpreadsheetConnectionUI(window fyne.Window, authSvc service.AuthService, trackerSvc service.TrackerService, user *domain.User, contentBox *fyne.Container, onBack, onComplete func()) {
 	titleEntry := widget.NewEntry()
 	titleEntry.SetPlaceHolder("Nombre de la spreadsheet")
 
@@ -101,7 +130,7 @@ func showSpreadsheetConnectionUI(window fyne.Window, trackerSvc service.TrackerS
 			fyne.Do(func() {
 				progressBar.Hide()
 				contentBox.RemoveAll()
-				showUsernameUI(window, trackerSvc, user, contentBox, onComplete)
+				showUsernameUI(window, trackerSvc, user, contentBox, true, "", onBack, onComplete)
 			})
 		}()
 	}
@@ -129,10 +158,14 @@ func showSpreadsheetConnectionUI(window fyne.Window, trackerSvc service.TrackerS
 				})
 				return
 			}
+			existingUsername := ""
+			if cfg, cfgErr := authSvc.GetConfig(); cfgErr == nil && cfg != nil {
+				existingUsername = cfg.Username
+			}
 			fyne.Do(func() {
 				progressBar.Hide()
 				contentBox.RemoveAll()
-				showUsernameUI(window, trackerSvc, user, contentBox, onComplete)
+				showUsernameUI(window, trackerSvc, user, contentBox, false, existingUsername, onBack, onComplete)
 			})
 		}()
 	}
@@ -144,10 +177,15 @@ func showSpreadsheetConnectionUI(window fyne.Window, trackerSvc service.TrackerS
 	contentBox.Add(progressBar)
 }
 
-func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user *domain.User, contentBox *fyne.Container, onComplete func()) {
+func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user *domain.User, contentBox *fyne.Container, isNewSpreadsheet bool, existingUsername string, onBack, onComplete func()) {
+	reuseMode := existingUsername != "" && !isNewSpreadsheet
+
 	usernameEntry := widget.NewEntry()
 	usernameEntry.SetPlaceHolder("Tu nombre en el spreadsheet")
-	if user != nil && user.DisplayName != "" {
+	if reuseMode {
+		usernameEntry.SetText(existingUsername)
+		usernameEntry.Disable()
+	} else if user != nil && user.DisplayName != "" {
 		usernameEntry.SetText(user.DisplayName)
 	}
 
@@ -174,6 +212,23 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 				})
 				return
 			}
+
+			if reuseMode {
+				if available {
+					fyne.Do(func() {
+						progressBar.Hide()
+						confirmBtn.Enable()
+						dialog.ShowError(fmt.Errorf("la hoja '%s' no existe en esta spreadsheet. Volve a elegir otra o borra el Username del config para crear una nueva", name), window)
+					})
+					return
+				}
+				fyne.Do(func() {
+					progressBar.Hide()
+					onComplete()
+				})
+				return
+			}
+
 			if !available {
 				fyne.Do(func() {
 					progressBar.Hide()
@@ -182,7 +237,7 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 				})
 				return
 			}
-			err = trackerSvc.SetupUser(name)
+			err = trackerSvc.SetupUser(name, isNewSpreadsheet)
 			if err != nil {
 				fyne.Do(func() {
 					progressBar.Hide()
@@ -201,13 +256,23 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 	contentBox.Add(widget.NewLabel("Nombre de usuario"))
 	contentBox.Add(usernameEntry)
 	contentBox.Add(confirmBtn)
+	if onBack != nil {
+		contentBox.Add(widget.NewButton("Volver", onBack))
+	}
 	contentBox.Add(progressBar)
 }
 
 func parseSpreadsheetID(input string) string {
 	input = strings.TrimSpace(input)
-	if strings.Contains(input, "docs.google.com/spreadsheets/d/") {
-		parts := strings.Split(input, "/d/")
+	if input == "" {
+		return ""
+	}
+	if strings.Contains(input, "://") {
+		u, err := url.Parse(input)
+		if err != nil || u.Host != "docs.google.com" {
+			return ""
+		}
+		parts := strings.Split(u.Path, "/d/")
 		if len(parts) < 2 {
 			return ""
 		}
@@ -215,10 +280,13 @@ func parseSpreadsheetID(input string) string {
 		if idx := strings.Index(id, "/"); idx != -1 {
 			id = id[:idx]
 		}
-		if idx := strings.Index(id, "?"); idx != -1 {
-			id = id[:idx]
+		if spreadsheetIDRegex.MatchString(id) {
+			return id
 		}
-		return id
+		return ""
 	}
-	return input
+	if spreadsheetIDRegex.MatchString(input) {
+		return input
+	}
+	return ""
 }
