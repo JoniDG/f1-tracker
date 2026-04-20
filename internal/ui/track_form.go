@@ -49,10 +49,14 @@ func NewTrackFormScreen(window fyne.Window, trackerSvc service.TrackerService, o
 		selectedTrack = selected
 		go func() {
 			tracks, err := trackerSvc.GetMyTracks()
-			if err != nil {
-				return
-			}
 			fyne.Do(func() {
+				if err != nil {
+					for _, e := range entries[:8] {
+						e.SetText("")
+					}
+					dialog.ShowError(fmt.Errorf("no se pudieron cargar los tiempos existentes: %w", err), window)
+					return
+				}
 				for _, t := range tracks {
 					if t.TrackName == selected {
 						bestLapEntry.SetText(t.BestLapTime)

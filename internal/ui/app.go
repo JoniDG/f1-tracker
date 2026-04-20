@@ -1,10 +1,9 @@
 package ui
 
 import (
-	"log"
-
 	"fyne.io/fyne/v2"
 	fyneApp "fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/dialog"
 
 	"github.com/JoniDG/f1-tracker/internal/domain"
 	"github.com/JoniDG/f1-tracker/internal/service"
@@ -38,8 +37,8 @@ func (fa *FyneApp) Run() {
 	} else {
 		user, err := fa.trackerSvc.GetCurrentUser()
 		if err != nil {
-			log.Printf("Error fetching user info: %v", err)
 			fa.showLoginScreen()
+			dialog.ShowError(err, fa.window)
 		} else {
 			fa.showPostLoginScreen(user)
 		}
