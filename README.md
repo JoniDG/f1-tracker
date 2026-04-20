@@ -40,8 +40,9 @@ Despues de guardar la configuracion, la app redirige a la pantalla de login dond
 La app usa la API REST de Google Sheets v4 para:
 
 - **Crear spreadsheets** — crea un spreadsheet nuevo desde la app
-- **Leer metadata del spreadsheet** — obtiene la lista de hojas/tabs existentes
+- **Leer metadata del spreadsheet** — obtiene la lista de hojas/tabs existentes y sus protected ranges
 - **Crear hojas** — agrega tabs nuevos via `batchUpdate` (uno por usuario)
+- **Proteger hojas** — agrega un `addProtectedRange` a la hoja del usuario con su email como unico editor
 - **Escribir datos** — escribe headers y tiempos de vuelta en las hojas
 - **Validar usernames** — verifica que no haya tabs duplicados antes de crear uno nuevo
 
@@ -51,6 +52,16 @@ Cada usuario tiene su propia hoja/tab en el spreadsheet con el siguiente formato
 |----------|-------------|-----------|-----------|-----------|-----------|-----------|-----------|------|-------|
 
 El SpreadsheetID se puede configurar de dos formas: ingresandolo en la pantalla de configuracion inicial (opcional), o a traves de la pantalla de Sheet Setup donde se puede crear un spreadsheet nuevo o conectar uno existente. Los usernames son unicos por spreadsheet — si un tab con ese nombre ya existe, la app muestra un error.
+
+## Proteccion de hojas por usuario
+
+Cuando la app crea una hoja para vos, tambien agrega un **protected range** de Google Sheets que lista tu email como unico editor. Eso significa que:
+
+- Otros amigos con acceso a la spreadsheet pueden **leer** tu hoja desde la app o desde Google Sheets web, pero no pueden editarla.
+- Si alguien intenta reclamar tu username en su config y abrir tu hoja desde la app, el flujo de "Conectar spreadsheet existente" verifica los editores del protected range contra el email del Google logueado y **bloquea el acceso** si no coincide.
+- Hojas creadas antes de este feature (sin protected range) son consideradas "legacy" y la app se rehusa a abrirlas — hay que borrarlas manualmente en Google Sheets y recrearlas desde la app.
+
+**Limitacion conocida:** el **owner de Drive** de la spreadsheet bypassea cualquier protected range. Si un amigo creo la spreadsheet compartida, esa persona puede editar la hoja de cualquiera. La unica forma de aislarse totalmente es que cada usuario tenga su propia spreadsheet (proxima iteracion).
 
 ## Donde se guardan las credenciales y tokens
 
@@ -71,7 +82,7 @@ La app usa `os.UserConfigDir()` para determinar el directorio de configuracion d
     "GoogleClientSecret": "GOCSPX-...",
     "CallbackPort": "8081",
     "SpreadsheetID": "1ABC...",
-    "Username": "JoniDG"
+    "Username": "Alice"
   },
   "token": {
     "access_token": "ya29...",
@@ -115,18 +126,18 @@ internal/
 - **repository/** — Acceso a datos externos:
   - `ConfigRepository` — lee/escribe config local con Viper (JSON)
   - `UserRepository` — consulta Google userinfo API
-  - `SheetsRepository` — interactua con Google Sheets API v4 (lectura, escritura, creacion de hojas)
+  - `SheetsRepository` — interactua con Google Sheets API v4 (lectura, escritura, creacion de hojas, protected ranges)
 - **service/** — Logica de negocio:
   - `AuthService` — flujo OAuth2+PKCE, refresh de tokens, gestion de config
-  - `TrackerService` — setup de spreadsheet (crear, conectar), gestion de usuarios (validar username, crear hoja con headers), CRUD de tiempos (pendiente)
+  - `TrackerService` — setup de spreadsheet (crear, conectar), gestion de usuarios (validar username, crear hoja con headers + proteccion, verificar ownership al reconectar), CRUD de tiempos
 - **ui/** — Interfaz grafica con Fyne (navegacion entre pantallas)
 
 ## Flujo de la aplicacion
 
 1. **Config screen** — Se muestra si no hay credenciales OAuth validas (ClientID, Secret)
 2. **Login screen** — Se muestra si hay credenciales pero no hay token de Google
-3. **Sheet Setup** (pendiente de implementar) — Se muestra si falta SpreadsheetID o Username. Permite crear un spreadsheet nuevo o conectar uno existente, y elegir un username unico
-4. **Menu principal** (pendiente de implementar) — Pantalla principal con acceso a tiempos, formularios y amigos
+3. **Sheet Setup** — Se muestra si falta SpreadsheetID o Username. Permite crear un spreadsheet nuevo (con proteccion de la hoja) o conectar uno existente. Si ya existe un Username en el config, la pantalla verifica via protected range que la hoja sea realmente tuya antes de dejarte seguir
+4. **Menu principal** — Pantalla principal con acceso a Mis Tiempos, Agregar/Actualizar Tiempo y Tiempos de Amigos
 
 ## Dependencias
 

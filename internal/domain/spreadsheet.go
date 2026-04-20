@@ -61,7 +61,8 @@ type SpreadsheetData struct {
 }
 
 type SheetData struct {
-	Properties SheetDataProperties `json:"properties"`
+	Properties      SheetDataProperties `json:"properties"`
+	ProtectedRanges []ProtectedRange    `json:"protectedRanges,omitempty"`
 }
 
 type SheetDataProperties struct {
@@ -80,12 +81,33 @@ type BatchUpdateRequest struct {
 }
 
 type BatchRequest struct {
-	AddSheet    *AddSheetRequest    `json:"addSheet,omitempty"`
-	DeleteSheet *DeleteSheetRequest `json:"deleteSheet,omitempty"`
+	AddSheet          *AddSheetRequest          `json:"addSheet,omitempty"`
+	DeleteSheet       *DeleteSheetRequest       `json:"deleteSheet,omitempty"`
+	AddProtectedRange *AddProtectedRangeRequest `json:"addProtectedRange,omitempty"`
 }
 
 type DeleteSheetRequest struct {
 	SheetId int `json:"sheetId"`
+}
+
+type AddProtectedRangeRequest struct {
+	ProtectedRange ProtectedRange `json:"protectedRange"`
+}
+
+type ProtectedRange struct {
+	ProtectedRangeId int              `json:"protectedRangeId,omitempty"`
+	Range            GridRange        `json:"range"`
+	Description      string           `json:"description,omitempty"`
+	WarningOnly      bool             `json:"warningOnly"`
+	Editors          ProtectedEditors `json:"editors"`
+}
+
+type GridRange struct {
+	SheetId int `json:"sheetId"`
+}
+
+type ProtectedEditors struct {
+	Users []string `json:"users"`
 }
 
 type AddSheetRequest struct {

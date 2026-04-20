@@ -202,7 +202,50 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 		confirmBtn.Disable()
 		progressBar.Show()
 
+		email := ""
+		if user != nil {
+			email = user.Email
+		}
+
 		go func() {
+			if reuseMode {
+				status, err := trackerSvc.VerifySheetOwnership(name, email)
+				if err != nil {
+					fyne.Do(func() {
+						progressBar.Hide()
+						confirmBtn.Enable()
+						dialog.ShowError(err, window)
+					})
+					return
+				}
+				switch status {
+				case service.SheetOwnershipOwned:
+					fyne.Do(func() {
+						progressBar.Hide()
+						onComplete()
+					})
+				case service.SheetOwnershipForeign:
+					fyne.Do(func() {
+						progressBar.Hide()
+						confirmBtn.Enable()
+						dialog.ShowError(fmt.Errorf("la hoja '%s' pertenece a otro usuario (su email no coincide con el tuyo)", name), window)
+					})
+				case service.SheetOwnershipUnprotected:
+					fyne.Do(func() {
+						progressBar.Hide()
+						confirmBtn.Enable()
+						dialog.ShowError(fmt.Errorf("la hoja '%s' es una hoja legacy sin proteccion. Borrala manualmente en Google Sheets y recreala desde la app", name), window)
+					})
+				case service.SheetOwnershipMissing:
+					fyne.Do(func() {
+						progressBar.Hide()
+						confirmBtn.Enable()
+						dialog.ShowError(fmt.Errorf("la hoja '%s' no existe en esta spreadsheet. Volve a elegir otra o borra el Username del config para crear una nueva", name), window)
+					})
+				}
+				return
+			}
+
 			available, err := trackerSvc.IsUsernameAvailable(name)
 			if err != nil {
 				fyne.Do(func() {
@@ -212,23 +255,6 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 				})
 				return
 			}
-
-			if reuseMode {
-				if available {
-					fyne.Do(func() {
-						progressBar.Hide()
-						confirmBtn.Enable()
-						dialog.ShowError(fmt.Errorf("la hoja '%s' no existe en esta spreadsheet. Volve a elegir otra o borra el Username del config para crear una nueva", name), window)
-					})
-					return
-				}
-				fyne.Do(func() {
-					progressBar.Hide()
-					onComplete()
-				})
-				return
-			}
-
 			if !available {
 				fyne.Do(func() {
 					progressBar.Hide()
@@ -237,7 +263,7 @@ func showUsernameUI(window fyne.Window, trackerSvc service.TrackerService, user 
 				})
 				return
 			}
-			err = trackerSvc.SetupUser(name, isNewSpreadsheet)
+			err = trackerSvc.SetupUser(name, isNewSpreadsheet, email)
 			if err != nil {
 				fyne.Do(func() {
 					progressBar.Hide()

@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/JoniDG/f1-tracker/internal/defines"
 	"github.com/JoniDG/f1-tracker/internal/domain"
@@ -14,13 +15,23 @@ type TrackerService interface {
 	CreateSpreadsheet(title string) (string, error)
 	SaveSpreadsheetID(spreadsheetID string) error
 	IsUsernameAvailable(username string) (bool, error)
-	SetupUser(username string, cleanupDefault bool) error
+	SetupUser(username string, cleanupDefault bool, ownerEmail string) error
+	VerifySheetOwnership(username, email string) (SheetOwnership, error)
 	NeedsSheetSetup() bool
 	GetMyTracks() ([]domain.TrackTime, error)
 	SaveTrackTime(track domain.TrackTime) error
 	GetFriendsList() ([]string, error)
 	GetFriendTracks(friendName string) ([]domain.TrackTime, error)
 }
+
+type SheetOwnership int
+
+const (
+	SheetOwnershipOwned SheetOwnership = iota
+	SheetOwnershipForeign
+	SheetOwnershipUnprotected
+	SheetOwnershipMissing
+)
 
 type trackerService struct {
 	authSvc    AuthService
@@ -67,9 +78,9 @@ func (s *trackerService) GetSheetNames(token, spreadsheetID string) (map[string]
 	return sheetNames, nil
 }
 
-func (s *trackerService) CreateSheet(token, spreadsheetID, userName string) error {
+func (s *trackerService) CreateSheet(token, spreadsheetID, userName, ownerEmail string) error {
 	log.Printf("Se debe crear la hoja %s\n", userName)
-	err := s.sheetsRepo.AddSheet(token, spreadsheetID, userName)
+	sheetID, err := s.sheetsRepo.AddSheet(token, spreadsheetID, userName)
 	if err != nil {
 		return err
 	}
@@ -87,7 +98,13 @@ func (s *trackerService) CreateSheet(token, spreadsheetID, userName string) erro
 	if err != nil {
 		return err
 	}
-	log.Printf("Hoja %s creada con headers y %d circuitos\n", userName, len(defines.Tracks))
+
+	description := fmt.Sprintf("f1-tracker: hoja de %s", ownerEmail)
+	if err := s.sheetsRepo.AddProtectedRange(token, spreadsheetID, sheetID, ownerEmail, description); err != nil {
+		return fmt.Errorf("protecting sheet: %w", err)
+	}
+
+	log.Printf("Hoja %s creada, protegida para %s\n", userName, ownerEmail)
 	return nil
 }
 
@@ -124,7 +141,7 @@ func (s *trackerService) IsUsernameAvailable(userName string) (bool, error) {
 	return true, nil
 }
 
-func (s *trackerService) SetupUser(userName string, cleanupDefault bool) error {
+func (s *trackerService) SetupUser(userName string, cleanupDefault bool, ownerEmail string) error {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
 		return err
@@ -138,7 +155,7 @@ func (s *trackerService) SetupUser(userName string, cleanupDefault bool) error {
 	if err != nil {
 		return err
 	}
-	err = s.CreateSheet(token.AccessToken, cfg.SpreadsheetID, userName)
+	err = s.CreateSheet(token.AccessToken, cfg.SpreadsheetID, userName, ownerEmail)
 	if err != nil {
 		return err
 	}
@@ -148,6 +165,40 @@ func (s *trackerService) SetupUser(userName string, cleanupDefault bool) error {
 		}
 	}
 	return nil
+}
+
+func (s *trackerService) VerifySheetOwnership(userName, email string) (SheetOwnership, error) {
+	token, err := s.authSvc.GetValidToken()
+	if err != nil {
+		return SheetOwnershipMissing, err
+	}
+	cfg, err := s.configRepo.GetConfig()
+	if err != nil {
+		return SheetOwnershipMissing, err
+	}
+
+	data, err := s.sheetsRepo.GetSpreadsheetData(token.AccessToken, cfg.SpreadsheetID)
+	if err != nil {
+		return SheetOwnershipMissing, err
+	}
+
+	for _, sheet := range data.Sheets {
+		if sheet.Properties.Title != userName {
+			continue
+		}
+		if len(sheet.ProtectedRanges) == 0 {
+			return SheetOwnershipUnprotected, nil
+		}
+		for _, pr := range sheet.ProtectedRanges {
+			for _, editor := range pr.Editors.Users {
+				if strings.EqualFold(editor, email) {
+					return SheetOwnershipOwned, nil
+				}
+			}
+		}
+		return SheetOwnershipForeign, nil
+	}
+	return SheetOwnershipMissing, nil
 }
 
 func (s *trackerService) deleteDefaultSheet(token, spreadsheetID, userName string) error {
