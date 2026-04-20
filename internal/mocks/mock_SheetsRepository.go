@@ -25,13 +25,18 @@ func (m *MockSheetsRepository) GetSpreadsheetData(accessToken, spreadsheetID str
 	return args.Get(0).(*domain.SpreadsheetData), args.Error(1)
 }
 
-func (m *MockSheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string) error {
+func (m *MockSheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string) (int, error) {
 	args := m.Called(accessToken, spreadsheetID, sheetName)
-	return args.Error(0)
+	return args.Int(0), args.Error(1)
 }
 
 func (m *MockSheetsRepository) DeleteSheet(accessToken, spreadsheetID string, sheetID int) error {
 	args := m.Called(accessToken, spreadsheetID, sheetID)
+	return args.Error(0)
+}
+
+func (m *MockSheetsRepository) AddProtectedRange(accessToken, spreadsheetID string, sheetID int, email, description string) error {
+	args := m.Called(accessToken, spreadsheetID, sheetID, email, description)
 	return args.Error(0)
 }
 

@@ -181,7 +181,7 @@ func TestTrackerService_IsUsernameAvailable_WhenTaken_ShouldReturnFalse(t *testi
 	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
 	spreadsheetData := &domain.SpreadsheetData{
 		Sheets: []domain.SheetData{
-			{Properties: domain.SheetDataProperties{Title: "JoniDG"}},
+			{Properties: domain.SheetDataProperties{Title: "Alice"}},
 		},
 	}
 
@@ -189,7 +189,7 @@ func TestTrackerService_IsUsernameAvailable_WhenTaken_ShouldReturnFalse(t *testi
 	configRepo.On("GetConfig").Return(cfg, nil)
 	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(spreadsheetData, nil)
 
-	available, err := svc.IsUsernameAvailable("JoniDG")
+	available, err := svc.IsUsernameAvailable("Alice")
 
 	require.NoError(t, err)
 	assert.False(t, available)
@@ -204,7 +204,7 @@ func TestTrackerService_IsUsernameAvailable_WhenTokenError_ShouldReturnError(t *
 
 	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
 
-	available, err := svc.IsUsernameAvailable("JoniDG")
+	available, err := svc.IsUsernameAvailable("Alice")
 
 	assert.False(t, available)
 	assert.EqualError(t, err, "token expired")
@@ -221,7 +221,7 @@ func TestTrackerService_IsUsernameAvailable_WhenConfigError_ShouldReturnError(t 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
 
-	available, err := svc.IsUsernameAvailable("JoniDG")
+	available, err := svc.IsUsernameAvailable("Alice")
 
 	assert.False(t, available)
 	assert.EqualError(t, err, "config error")
@@ -236,7 +236,7 @@ func TestTrackerService_SetupUser_WhenTokenError_ShouldReturnError(t *testing.T)
 
 	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
 
-	err := svc.SetupUser("JoniDG", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	assert.EqualError(t, err, "token expired")
 }
@@ -252,7 +252,7 @@ func TestTrackerService_SetupUser_WhenConfigError_ShouldReturnError(t *testing.T
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
 
-	err := svc.SetupUser("JoniDG", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	assert.EqualError(t, err, "config error")
 }
@@ -268,9 +268,9 @@ func TestTrackerService_SetupUser_WhenSetConfigError_ShouldReturnError(t *testin
 	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
-	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}).Return(errors.New("write error"))
+	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}).Return(errors.New("write error"))
 
-	err := svc.SetupUser("JoniDG", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	assert.EqualError(t, err, "write error")
 }
@@ -319,8 +319,8 @@ func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
-	configRepo.On("SetConfig", domain.Config{GoogleClientID: "test-id", SpreadsheetID: "sheet-123", Username: "JoniDG"}).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "JoniDG").Return(nil)
+	configRepo.On("SetConfig", domain.Config{GoogleClientID: "test-id", SpreadsheetID: "sheet-123", Username: "Alice"}).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(42, nil)
 	rows := [][]string{{
 		"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3",
 		"S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha",
@@ -328,9 +328,10 @@ func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *
 	for _, track := range defines.Tracks {
 		rows = append(rows, []string{track, "", "", "", "", "", "", "", "", ""})
 	}
-	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A1:J25", rows).Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "Alice!A1:J25", rows).Return(nil)
+	sheetsRepo.On("AddProtectedRange", "valid-token", "sheet-123", 42, "alice@test.com", "f1-tracker: hoja de alice@test.com").Return(nil)
 
-	err := svc.SetupUser("JoniDG", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	require.NoError(t, err)
 	configRepo.AssertExpectations(t)
@@ -344,7 +345,7 @@ func TestTrackerService_NeedsSheetSetup_WhenMissingSpreadsheetID_ShouldReturnTru
 	sheetsRepo := new(mocks.MockSheetsRepository)
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
-	cfg := &domain.Config{Username: "JoniDG"}
+	cfg := &domain.Config{Username: "Alice"}
 	configRepo.On("GetConfig").Return(cfg, nil)
 
 	assert.True(t, svc.NeedsSheetSetup())
@@ -370,7 +371,7 @@ func TestTrackerService_NeedsSheetSetup_WhenComplete_ShouldReturnFalse(t *testin
 	sheetsRepo := new(mocks.MockSheetsRepository)
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	configRepo.On("GetConfig").Return(cfg, nil)
 
 	assert.False(t, svc.NeedsSheetSetup())
@@ -396,7 +397,7 @@ func TestTrackerService_GetMyTracks_WhenSuccess_ShouldReturnTracks(t *testing.T)
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	values := [][]string{
 		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
 		{"Bahrain", "1:23.456", "0:28.100", "0:27.200", "0:28.156", "0:28.100", "0:27.200", "0:28.156", "Ferrari", "2026-04-09"},
@@ -405,7 +406,7 @@ func TestTrackerService_GetMyTracks_WhenSuccess_ShouldReturnTracks(t *testing.T)
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
-	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(values, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "Alice").Return(values, nil)
 
 	tracks, err := svc.GetMyTracks()
 
@@ -426,14 +427,14 @@ func TestTrackerService_GetMyTracks_WhenOnlyHeaders_ShouldReturnEmpty(t *testing
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	values := [][]string{
 		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
 	}
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
-	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(values, nil)
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "Alice").Return(values, nil)
 
 	tracks, err := svc.GetMyTracks()
 
@@ -466,10 +467,10 @@ func TestTrackerService_GetMyTracks_WhenSheetError_ShouldReturnError(t *testing.
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
-	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "JoniDG").Return(nil, errors.New("API error"))
+	sheetsRepo.On("GetSheetValues", "valid-token", "sheet-123", "Alice").Return(nil, errors.New("API error"))
 
 	tracks, err := svc.GetMyTracks()
 
@@ -500,7 +501,7 @@ func TestTrackerService_SaveTrackTime_WhenSuccess_ShouldWriteRow(t *testing.T) {
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
@@ -516,7 +517,7 @@ func TestTrackerService_SaveTrackTime_WhenSuccess_ShouldWriteRow(t *testing.T) {
 		"0:28.1", "0:27.2", "0:28.1", "Ferrari", "2026-04-09",
 	}}
 
-	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A2:J2", expectedRow).Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "Alice!A2:J2", expectedRow).Return(nil)
 
 	err := svc.SaveTrackTime(track)
 
@@ -578,7 +579,7 @@ func TestTrackerService_SaveTrackTime_WhenLastTrack_ShouldUseCorrectRow(t *testi
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
@@ -586,7 +587,7 @@ func TestTrackerService_SaveTrackTime_WhenLastTrack_ShouldUseCorrectRow(t *testi
 	track := domain.TrackTime{TrackName: "Abu Dhabi", BestLapTime: "1:30.000"}
 	expectedRow := [][]string{{"Abu Dhabi", "1:30.000", "", "", "", "", "", "", "", ""}}
 
-	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A25:J25", expectedRow).Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "Alice!A25:J25", expectedRow).Return(nil)
 
 	err := svc.SaveTrackTime(track)
 
@@ -602,10 +603,10 @@ func TestTrackerService_GetFriendsList_WhenFriendsExist_ShouldReturnFiltered(t *
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	spreadsheetData := &domain.SpreadsheetData{
 		Sheets: []domain.SheetData{
-			{Properties: domain.SheetDataProperties{Title: "JoniDG"}},
+			{Properties: domain.SheetDataProperties{Title: "Alice"}},
 			{Properties: domain.SheetDataProperties{Title: "Amigo1"}},
 			{Properties: domain.SheetDataProperties{Title: "Amigo2"}},
 		},
@@ -621,7 +622,7 @@ func TestTrackerService_GetFriendsList_WhenFriendsExist_ShouldReturnFiltered(t *
 	assert.Len(t, friends, 2)
 	assert.Contains(t, friends, "Amigo1")
 	assert.Contains(t, friends, "Amigo2")
-	assert.NotContains(t, friends, "JoniDG")
+	assert.NotContains(t, friends, "Alice")
 }
 
 func TestTrackerService_GetFriendsList_WhenNoFriends_ShouldReturnEmpty(t *testing.T) {
@@ -632,10 +633,10 @@ func TestTrackerService_GetFriendsList_WhenNoFriends_ShouldReturnEmpty(t *testin
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	spreadsheetData := &domain.SpreadsheetData{
 		Sheets: []domain.SheetData{
-			{Properties: domain.SheetDataProperties{Title: "JoniDG"}},
+			{Properties: domain.SheetDataProperties{Title: "Alice"}},
 		},
 	}
 
@@ -657,7 +658,7 @@ func TestTrackerService_GetFriendTracks_WhenSuccess_ShouldReturnTracks(t *testin
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	values := [][]string{
 		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
 		{"Bahrain", "1:25.000", "", "", "", "", "", "", "McLaren", "2026-04-10"},
@@ -683,7 +684,7 @@ func TestTrackerService_GetFriendTracks_WhenOnlyHeaders_ShouldReturnEmpty(t *tes
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 	values := [][]string{
 		{"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3", "S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha"},
 	}
@@ -706,7 +707,7 @@ func TestTrackerService_GetFriendTracks_WhenError_ShouldReturnError(t *testing.T
 	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
 
 	token := &oauth2.Token{AccessToken: "valid-token"}
-	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}
 
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
@@ -715,5 +716,159 @@ func TestTrackerService_GetFriendTracks_WhenError_ShouldReturnError(t *testing.T
 	tracks, err := svc.GetFriendTracks("Amigo1")
 
 	assert.Nil(t, tracks)
+	assert.EqualError(t, err, "API error")
+}
+
+func newTrackerSvc(t *testing.T) (*mocks.MockAuthService, *mocks.MockConfigRepository, *mocks.MockSheetsRepository, TrackerService) {
+	t.Helper()
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+	return authSvc, configRepo, sheetsRepo, svc
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenOwned_ShouldReturnOwned(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{
+				Properties: domain.SheetDataProperties{Title: "Alice"},
+				ProtectedRanges: []domain.ProtectedRange{
+					{Editors: domain.ProtectedEditors{Users: []string{"alice@test.com"}}},
+				},
+			},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	status, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	require.NoError(t, err)
+	assert.Equal(t, SheetOwnershipOwned, status)
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenForeign_ShouldReturnForeign(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{
+				Properties: domain.SheetDataProperties{Title: "Alice"},
+				ProtectedRanges: []domain.ProtectedRange{
+					{Editors: domain.ProtectedEditors{Users: []string{"otro@test.com"}}},
+				},
+			},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	status, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	require.NoError(t, err)
+	assert.Equal(t, SheetOwnershipForeign, status)
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenUnprotected_ShouldReturnUnprotected(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{Title: "Alice"}},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	status, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	require.NoError(t, err)
+	assert.Equal(t, SheetOwnershipUnprotected, status)
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenMissing_ShouldReturnMissing(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{Title: "OtroUsuario"}},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	status, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	require.NoError(t, err)
+	assert.Equal(t, SheetOwnershipMissing, status)
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenEmailCaseInsensitive_ShouldReturnOwned(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{
+				Properties: domain.SheetDataProperties{Title: "Alice"},
+				ProtectedRanges: []domain.ProtectedRange{
+					{Editors: domain.ProtectedEditors{Users: []string{"Alice@Test.com"}}},
+				},
+			},
+		},
+	}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	status, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	require.NoError(t, err)
+	assert.Equal(t, SheetOwnershipOwned, status)
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenTokenError_ShouldReturnError(t *testing.T) {
+	authSvc, _, _, svc := newTrackerSvc(t)
+
+	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
+
+	_, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
+	assert.EqualError(t, err, "token expired")
+}
+
+func TestTrackerService_VerifySheetOwnership_WhenSheetAPIError_ShouldReturnError(t *testing.T) {
+	authSvc, configRepo, sheetsRepo, svc := newTrackerSvc(t)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(nil, errors.New("API error"))
+
+	_, err := svc.VerifySheetOwnership("Alice", "alice@test.com")
+
 	assert.EqualError(t, err, "API error")
 }

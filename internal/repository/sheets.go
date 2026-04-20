@@ -12,8 +12,9 @@ import (
 type SheetsRepository interface {
 	GetSheetValues(accessToken, spreadsheetID, sheetName string) ([][]string, error)
 	GetSpreadsheetData(accessToken, spreadsheetID string) (*domain.SpreadsheetData, error)
-	AddSheet(accessToken, spreadsheetID, sheetName string) error
+	AddSheet(accessToken, spreadsheetID, sheetName string) (int, error)
 	DeleteSheet(accessToken, spreadsheetID string, sheetID int) error
+	AddProtectedRange(accessToken, spreadsheetID string, sheetID int, email, description string) error
 	UpdateSheetValues(accessToken, spreadsheetID, rangeValues string, values [][]string) error
 	CreateSpreadsheet(accessToken, title string) (string, error)
 }
@@ -52,7 +53,7 @@ func (r *sheetsRepository) GetSpreadsheetData(accessToken, spreadsheetID string)
 	resp, err := resty.New().R().
 		SetAuthToken(accessToken).
 		SetPathParam("spreadsheetID", spreadsheetID).
-		SetQueryParam("fields", "spreadsheetId,properties,sheets.properties").
+		SetQueryParam("fields", "spreadsheetId,properties,sheets.properties,sheets.protectedRanges").
 		Get(r.baseURL + "/{spreadsheetID}")
 	if err != nil {
 		return nil, fmt.Errorf("calling get spreadsheet data API: %w", err)
@@ -68,7 +69,7 @@ func (r *sheetsRepository) GetSpreadsheetData(accessToken, spreadsheetID string)
 
 	return &spreadsheetData, nil
 }
-func (r *sheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string) error {
+func (r *sheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string) (int, error) {
 	body := domain.BatchUpdateRequest{
 		Requests: []domain.BatchRequest{
 			{
@@ -85,17 +86,20 @@ func (r *sheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string
 		SetBody(body).
 		Post(r.baseURL + "/{spreadsheetID}:batchUpdate")
 	if err != nil {
-		return fmt.Errorf("calling add sheet API: %w", err)
+		return 0, fmt.Errorf("calling add sheet API: %w", err)
 	}
 	if resp.StatusCode() != http.StatusOK {
-		return fmt.Errorf("add sheet API returned status %d: %s", resp.StatusCode(), resp.String())
+		return 0, fmt.Errorf("add sheet API returned status %d: %s", resp.StatusCode(), resp.String())
 	}
 
 	var response domain.BatchResponse
 	if err = json.Unmarshal(resp.Body(), &response); err != nil {
-		return fmt.Errorf("parsing add sheet response: %w", err)
+		return 0, fmt.Errorf("parsing add sheet response: %w", err)
 	}
-	return nil
+	if len(response.Replies) == 0 || response.Replies[0].AddSheet == nil {
+		return 0, fmt.Errorf("add sheet response missing sheetId")
+	}
+	return response.Replies[0].AddSheet.Properties.SheetId, nil
 }
 func (r *sheetsRepository) DeleteSheet(accessToken, spreadsheetID string, sheetID int) error {
 	body := domain.BatchUpdateRequest{
@@ -116,6 +120,36 @@ func (r *sheetsRepository) DeleteSheet(accessToken, spreadsheetID string, sheetI
 	}
 	if resp.StatusCode() != http.StatusOK {
 		return fmt.Errorf("delete sheet API returned status %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
+func (r *sheetsRepository) AddProtectedRange(accessToken, spreadsheetID string, sheetID int, email, description string) error {
+	body := domain.BatchUpdateRequest{
+		Requests: []domain.BatchRequest{
+			{
+				AddProtectedRange: &domain.AddProtectedRangeRequest{
+					ProtectedRange: domain.ProtectedRange{
+						Range:       domain.GridRange{SheetId: sheetID},
+						Description: description,
+						WarningOnly: false,
+						Editors:     domain.ProtectedEditors{Users: []string{email}},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := resty.New().R().
+		SetAuthToken(accessToken).
+		SetPathParam("spreadsheetID", spreadsheetID).
+		SetBody(body).
+		Post(r.baseURL + "/{spreadsheetID}:batchUpdate")
+	if err != nil {
+		return fmt.Errorf("calling add protected range API: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("add protected range API returned status %d: %s", resp.StatusCode(), resp.String())
 	}
 	return nil
 }
