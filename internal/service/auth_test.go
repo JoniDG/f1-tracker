@@ -519,15 +519,47 @@ func TestAuthService_HasValidConfig_WhenFalse_ShouldReturnFalse(t *testing.T) {
 	assert.False(t, svc.HasValidConfig())
 }
 
-func TestAuthService_HasStoredToken_WhenTokenExists_ShouldReturnTrue(t *testing.T) {
+func TestAuthService_HasStoredToken_WhenRefreshTokenExists_ShouldReturnTrue(t *testing.T) {
 	configRepo := new(mocks.MockConfigRepository)
 	userRepo := new(mocks.MockUserRepository)
 	svc := NewAuthService(configRepo, userRepo)
 
-	token := &oauth2.Token{AccessToken: "test"}
+	token := &oauth2.Token{RefreshToken: "refresh"}
 	configRepo.On("GetGoogleToken").Return(token, nil)
 
 	assert.True(t, svc.HasStoredToken())
+}
+
+func TestAuthService_HasStoredToken_WhenAccessTokenValid_ShouldReturnTrue(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	token := &oauth2.Token{AccessToken: "access", Expiry: time.Now().Add(1 * time.Hour)}
+	configRepo.On("GetGoogleToken").Return(token, nil)
+
+	assert.True(t, svc.HasStoredToken())
+}
+
+func TestAuthService_HasStoredToken_WhenOnlyAccessAndExpired_ShouldReturnFalse(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	token := &oauth2.Token{AccessToken: "access", Expiry: time.Now().Add(-1 * time.Hour)}
+	configRepo.On("GetGoogleToken").Return(token, nil)
+
+	assert.False(t, svc.HasStoredToken())
+}
+
+func TestAuthService_HasStoredToken_WhenEmptyToken_ShouldReturnFalse(t *testing.T) {
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	svc := NewAuthService(configRepo, userRepo)
+
+	configRepo.On("GetGoogleToken").Return(&oauth2.Token{}, nil)
+
+	assert.False(t, svc.HasStoredToken())
 }
 
 func TestAuthService_HasStoredToken_WhenNoToken_ShouldReturnFalse(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/JoniDG/f1-tracker/internal/defines"
 	"github.com/JoniDG/f1-tracker/internal/domain"
 	"github.com/JoniDG/f1-tracker/internal/repository"
 	"github.com/gin-gonic/gin"
@@ -44,8 +45,14 @@ func (s *authService) HasValidConfig() bool {
 }
 
 func (s *authService) HasStoredToken() bool {
-	_, err := s.configRepo.GetGoogleToken()
-	return err == nil
+	token, err := s.configRepo.GetGoogleToken()
+	if err != nil {
+		return false
+	}
+	if token.RefreshToken != "" {
+		return true
+	}
+	return token.AccessToken != "" && token.Expiry.After(time.Now())
 }
 
 func (s *authService) GetConfig() (*domain.Config, error) {
@@ -165,12 +172,18 @@ func (s *authService) Login() (*domain.User, error) {
 		return nil, fmt.Errorf("opening browser: %w", err)
 	}
 
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), defines.LoginTimeout)
+	defer cancel()
+
 	var code string
 	select {
 	case code = <-callbackCode:
 	case err := <-callbackErr:
 		_ = server.Shutdown(context.Background())
 		return nil, err
+	case <-timeoutCtx.Done():
+		_ = server.Shutdown(context.Background())
+		return nil, fmt.Errorf("timeout de %s esperando autorizacion en el navegador", defines.LoginTimeout)
 	}
 
 	_ = server.Shutdown(context.Background())
