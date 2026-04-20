@@ -14,7 +14,7 @@ type TrackerService interface {
 	CreateSpreadsheet(title string) (string, error)
 	SaveSpreadsheetID(spreadsheetID string) error
 	IsUsernameAvailable(username string) (bool, error)
-	SetupUser(username string) error
+	SetupUser(username string, cleanupDefault bool) error
 	NeedsSheetSetup() bool
 	GetMyTracks() ([]domain.TrackTime, error)
 	SaveTrackTime(track domain.TrackTime) error
@@ -124,7 +124,7 @@ func (s *trackerService) IsUsernameAvailable(userName string) (bool, error) {
 	return true, nil
 }
 
-func (s *trackerService) SetupUser(userName string) error {
+func (s *trackerService) SetupUser(userName string, cleanupDefault bool) error {
 	token, err := s.authSvc.GetValidToken()
 	if err != nil {
 		return err
@@ -141,6 +141,24 @@ func (s *trackerService) SetupUser(userName string) error {
 	err = s.CreateSheet(token.AccessToken, cfg.SpreadsheetID, userName)
 	if err != nil {
 		return err
+	}
+	if cleanupDefault {
+		if err := s.deleteDefaultSheet(token.AccessToken, cfg.SpreadsheetID, userName); err != nil {
+			log.Printf("no se pudo eliminar la hoja por defecto: %v", err)
+		}
+	}
+	return nil
+}
+
+func (s *trackerService) deleteDefaultSheet(token, spreadsheetID, userName string) error {
+	data, err := s.sheetsRepo.GetSpreadsheetData(token, spreadsheetID)
+	if err != nil {
+		return err
+	}
+	for _, sheet := range data.Sheets {
+		if sheet.Properties.SheetId == 0 && sheet.Properties.Title != userName {
+			return s.sheetsRepo.DeleteSheet(token, spreadsheetID, sheet.Properties.SheetId)
+		}
 	}
 	return nil
 }

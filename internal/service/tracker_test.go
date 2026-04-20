@@ -236,7 +236,7 @@ func TestTrackerService_SetupUser_WhenTokenError_ShouldReturnError(t *testing.T)
 
 	authSvc.On("GetValidToken").Return(nil, errors.New("token expired"))
 
-	err := svc.SetupUser("JoniDG")
+	err := svc.SetupUser("JoniDG", false)
 
 	assert.EqualError(t, err, "token expired")
 }
@@ -252,7 +252,7 @@ func TestTrackerService_SetupUser_WhenConfigError_ShouldReturnError(t *testing.T
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(nil, errors.New("config error"))
 
-	err := svc.SetupUser("JoniDG")
+	err := svc.SetupUser("JoniDG", false)
 
 	assert.EqualError(t, err, "config error")
 }
@@ -270,7 +270,7 @@ func TestTrackerService_SetupUser_WhenSetConfigError_ShouldReturnError(t *testin
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "JoniDG"}).Return(errors.New("write error"))
 
-	err := svc.SetupUser("JoniDG")
+	err := svc.SetupUser("JoniDG", false)
 
 	assert.EqualError(t, err, "write error")
 }
@@ -330,7 +330,7 @@ func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *
 	}
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "JoniDG!A1:J25", rows).Return(nil)
 
-	err := svc.SetupUser("JoniDG")
+	err := svc.SetupUser("JoniDG", false)
 
 	require.NoError(t, err)
 	configRepo.AssertExpectations(t)

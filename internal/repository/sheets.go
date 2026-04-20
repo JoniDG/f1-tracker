@@ -13,6 +13,7 @@ type SheetsRepository interface {
 	GetSheetValues(accessToken, spreadsheetID, sheetName string) ([][]string, error)
 	GetSpreadsheetData(accessToken, spreadsheetID string) (*domain.SpreadsheetData, error)
 	AddSheet(accessToken, spreadsheetID, sheetName string) error
+	DeleteSheet(accessToken, spreadsheetID string, sheetID int) error
 	UpdateSheetValues(accessToken, spreadsheetID, rangeValues string, values [][]string) error
 	CreateSpreadsheet(accessToken, title string) (string, error)
 }
@@ -96,6 +97,29 @@ func (r *sheetsRepository) AddSheet(accessToken, spreadsheetID, sheetName string
 	}
 	return nil
 }
+func (r *sheetsRepository) DeleteSheet(accessToken, spreadsheetID string, sheetID int) error {
+	body := domain.BatchUpdateRequest{
+		Requests: []domain.BatchRequest{
+			{
+				DeleteSheet: &domain.DeleteSheetRequest{SheetId: sheetID},
+			},
+		},
+	}
+
+	resp, err := resty.New().R().
+		SetAuthToken(accessToken).
+		SetPathParam("spreadsheetID", spreadsheetID).
+		SetBody(body).
+		Post(r.baseURL + "/{spreadsheetID}:batchUpdate")
+	if err != nil {
+		return fmt.Errorf("calling delete sheet API: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("delete sheet API returned status %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
 func (r *sheetsRepository) UpdateSheetValues(accessToken, spreadsheetID, rangeValues string, values [][]string) error {
 	body := domain.UpdateSheetValuesRequest{
 		Range:          rangeValues,
