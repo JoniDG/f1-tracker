@@ -8,6 +8,7 @@ import (
 	"github.com/JoniDG/f1-tracker/internal/domain"
 	"github.com/JoniDG/f1-tracker/internal/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 )
@@ -336,6 +337,136 @@ func TestTrackerService_SetupUser_WhenSuccess_ShouldSaveConfigAndCreateSheet(t *
 	require.NoError(t, err)
 	configRepo.AssertExpectations(t)
 	sheetsRepo.AssertExpectations(t)
+}
+
+func TestTrackerService_SetupUser_WhenCleanupDefault_ShouldDeleteSheet1(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	rows := [][]string{{
+		"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3",
+		"S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha",
+	}}
+	for _, track := range defines.Tracks {
+		rows = append(rows, []string{track, "", "", "", "", "", "", "", "", ""})
+	}
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "Alice!A1:J25", rows).Return(nil)
+
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{SheetId: 0, Title: "Sheet1"}},
+			{Properties: domain.SheetDataProperties{SheetId: 1, Title: "Alice"}},
+		},
+	}
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+	sheetsRepo.On("DeleteSheet", "valid-token", "sheet-123", 0).Return(nil)
+
+	err := svc.SetupUser("Alice", true)
+
+	require.NoError(t, err)
+	sheetsRepo.AssertExpectations(t)
+}
+
+func TestTrackerService_SetupUser_WhenCleanupDefaultAndDeleteFails_ShouldStillSucceed(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(nil)
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(nil, errors.New("API error"))
+
+	err := svc.SetupUser("Alice", true)
+
+	require.NoError(t, err)
+}
+
+func TestTrackerService_SetupUser_WhenCleanupDefaultNoSheet1_ShouldSucceed(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", mock.Anything).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(nil)
+
+	data := &domain.SpreadsheetData{
+		Sheets: []domain.SheetData{
+			{Properties: domain.SheetDataProperties{SheetId: 1, Title: "Alice"}},
+		},
+	}
+	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
+
+	err := svc.SetupUser("Alice", true)
+
+	require.NoError(t, err)
+	sheetsRepo.AssertNotCalled(t, "DeleteSheet", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestTrackerService_SetupUser_WhenAddSheetFails_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", mock.Anything).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(errors.New("add sheet failed"))
+
+	err := svc.SetupUser("Alice", false)
+
+	assert.EqualError(t, err, "add sheet failed")
+}
+
+func TestTrackerService_SetupUser_WhenUpdateValuesFails_ShouldReturnError(t *testing.T) {
+	authSvc := new(mocks.MockAuthService)
+	configRepo := new(mocks.MockConfigRepository)
+	userRepo := new(mocks.MockUserRepository)
+	sheetsRepo := new(mocks.MockSheetsRepository)
+	svc := NewTrackerService(authSvc, configRepo, userRepo, sheetsRepo)
+
+	token := &oauth2.Token{AccessToken: "valid-token"}
+	cfg := &domain.Config{SpreadsheetID: "sheet-123"}
+
+	authSvc.On("GetValidToken").Return(token, nil)
+	configRepo.On("GetConfig").Return(cfg, nil)
+	configRepo.On("SetConfig", mock.Anything).Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(errors.New("update failed"))
+
+	err := svc.SetupUser("Alice", false)
+
+	assert.EqualError(t, err, "update failed")
 }
 
 func TestTrackerService_NeedsSheetSetup_WhenMissingSpreadsheetID_ShouldReturnTrue(t *testing.T) {

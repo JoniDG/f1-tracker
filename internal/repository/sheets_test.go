@@ -355,3 +355,43 @@ func TestSheetsRepository_CreateSpreadsheet_WhenServerDown_ShouldReturnError(t *
 	assert.Empty(t, id)
 	assert.ErrorContains(t, err, "calling create spreadsheet API")
 }
+
+func TestSheetsRepository_DeleteSheet_WhenSuccess_ShouldReturnNil(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "Bearer test-token", r.Header.Get("Authorization"))
+		assert.Equal(t, http.MethodPost, r.Method)
+		var body domain.BatchUpdateRequest
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		require.Len(t, body.Requests, 1)
+		require.NotNil(t, body.Requests[0].DeleteSheet)
+		assert.Equal(t, 42, body.Requests[0].DeleteSheet.SheetId)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer server.Close()
+
+	repo := &sheetsRepository{baseURL: server.URL}
+	err := repo.DeleteSheet("test-token", "sheet-123", 42)
+
+	require.NoError(t, err)
+}
+
+func TestSheetsRepository_DeleteSheet_WhenNon200_ShouldReturnError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"forbidden"}`))
+	}))
+	defer server.Close()
+
+	repo := &sheetsRepository{baseURL: server.URL}
+	err := repo.DeleteSheet("test-token", "sheet-123", 42)
+
+	assert.ErrorContains(t, err, "delete sheet API returned status 403")
+}
+
+func TestSheetsRepository_DeleteSheet_WhenServerDown_ShouldReturnError(t *testing.T) {
+	repo := &sheetsRepository{baseURL: "http://localhost:1"}
+	err := repo.DeleteSheet("test-token", "sheet-123", 42)
+
+	assert.ErrorContains(t, err, "calling delete sheet API")
+}
