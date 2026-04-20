@@ -352,7 +352,7 @@ func TestTrackerService_SetupUser_WhenCleanupDefault_ShouldDeleteSheet1(t *testi
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(42, nil)
 	rows := [][]string{{
 		"Circuito", "Mejor Vuelta", "Mejor S1", "Mejor S2", "Mejor S3",
 		"S1 Vuelta", "S2 Vuelta", "S3 Vuelta", "Auto", "Fecha",
@@ -361,6 +361,7 @@ func TestTrackerService_SetupUser_WhenCleanupDefault_ShouldDeleteSheet1(t *testi
 		rows = append(rows, []string{track, "", "", "", "", "", "", "", "", ""})
 	}
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", "Alice!A1:J25", rows).Return(nil)
+	sheetsRepo.On("AddProtectedRange", "valid-token", "sheet-123", 42, "alice@test.com", "f1-tracker: hoja de alice@test.com").Return(nil)
 
 	data := &domain.SpreadsheetData{
 		Sheets: []domain.SheetData{
@@ -371,7 +372,7 @@ func TestTrackerService_SetupUser_WhenCleanupDefault_ShouldDeleteSheet1(t *testi
 	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
 	sheetsRepo.On("DeleteSheet", "valid-token", "sheet-123", 0).Return(nil)
 
-	err := svc.SetupUser("Alice", true)
+	err := svc.SetupUser("Alice", true, "alice@test.com")
 
 	require.NoError(t, err)
 	sheetsRepo.AssertExpectations(t)
@@ -390,11 +391,12 @@ func TestTrackerService_SetupUser_WhenCleanupDefaultAndDeleteFails_ShouldStillSu
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", domain.Config{SpreadsheetID: "sheet-123", Username: "Alice"}).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(42, nil)
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(nil)
+	sheetsRepo.On("AddProtectedRange", "valid-token", "sheet-123", 42, "alice@test.com", mock.Anything).Return(nil)
 	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(nil, errors.New("API error"))
 
-	err := svc.SetupUser("Alice", true)
+	err := svc.SetupUser("Alice", true, "alice@test.com")
 
 	require.NoError(t, err)
 }
@@ -412,8 +414,9 @@ func TestTrackerService_SetupUser_WhenCleanupDefaultNoSheet1_ShouldSucceed(t *te
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", mock.Anything).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(42, nil)
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(nil)
+	sheetsRepo.On("AddProtectedRange", "valid-token", "sheet-123", 42, "alice@test.com", mock.Anything).Return(nil)
 
 	data := &domain.SpreadsheetData{
 		Sheets: []domain.SheetData{
@@ -422,7 +425,7 @@ func TestTrackerService_SetupUser_WhenCleanupDefaultNoSheet1_ShouldSucceed(t *te
 	}
 	sheetsRepo.On("GetSpreadsheetData", "valid-token", "sheet-123").Return(data, nil)
 
-	err := svc.SetupUser("Alice", true)
+	err := svc.SetupUser("Alice", true, "alice@test.com")
 
 	require.NoError(t, err)
 	sheetsRepo.AssertNotCalled(t, "DeleteSheet", mock.Anything, mock.Anything, mock.Anything)
@@ -441,9 +444,9 @@ func TestTrackerService_SetupUser_WhenAddSheetFails_ShouldReturnError(t *testing
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", mock.Anything).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(errors.New("add sheet failed"))
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(0, errors.New("add sheet failed"))
 
-	err := svc.SetupUser("Alice", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	assert.EqualError(t, err, "add sheet failed")
 }
@@ -461,10 +464,10 @@ func TestTrackerService_SetupUser_WhenUpdateValuesFails_ShouldReturnError(t *tes
 	authSvc.On("GetValidToken").Return(token, nil)
 	configRepo.On("GetConfig").Return(cfg, nil)
 	configRepo.On("SetConfig", mock.Anything).Return(nil)
-	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(nil)
+	sheetsRepo.On("AddSheet", "valid-token", "sheet-123", "Alice").Return(42, nil)
 	sheetsRepo.On("UpdateSheetValues", "valid-token", "sheet-123", mock.Anything, mock.Anything).Return(errors.New("update failed"))
 
-	err := svc.SetupUser("Alice", false)
+	err := svc.SetupUser("Alice", false, "alice@test.com")
 
 	assert.EqualError(t, err, "update failed")
 }
